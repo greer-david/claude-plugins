@@ -1,0 +1,30 @@
+#!/bin/bash
+# Print the weekly-roundup config as JSON with defaults merged in and ~ expanded.
+# Config: $WEEKLY_ROUNDUP_CONFIG or ~/.config/weekly-roundup/config.json. Needs only jq.
+# Exits non-zero if the config is missing or invalid, so callers can fail closed.
+set -euo pipefail
+path=${WEEKLY_ROUNDUP_CONFIG:-$HOME/.config/weekly-roundup/config.json}
+[ -f "$path" ] || { echo "weekly-roundup: no config at $path" >&2; exit 1; }
+jq -e --arg home "$HOME" '
+  def deep(a; b): a as $a | b as $b
+    | if ($a|type)=="object" and ($b|type)=="object"
+      then reduce ($b|keys_unsorted[]) as $k ($a; .[$k] = deep($a[$k]; $b[$k]))
+      else $b end;
+  def tilde: if type=="string" then sub("^~"; $home) else . end;
+  deep({
+    week_start_day: "sunday",
+    transcripts_glob: "~/.claude/projects/*/*.jsonl",
+    skip_projects: [], repos: [], github_repos: [],
+    caps: {findings_per_source: 40, transcript_kb: 96, clerk_kb: 60, commits_per_repo: 100},
+    budgets: {outlook_email_search: 30, read_resource: 40, outlook_calendar_search: 4,
+              chat_message_search: 24, teams_list_chats: 2, teams_list_teams: 1,
+              teams_list_channels: 5, teams_list_channel_messages: 10, sharepoint_search: 5,
+              search_people: 10, get_me: 2, default: 3},
+    max_window_days: 8,
+    m365: {include_self_chat: true, noise_senders: [], mute_chats: [], alert_patterns: []}
+  }; .)
+  | .log_dir |= tilde | .rules_file |= tilde | .team_rules_file |= tilde
+  | .clerk_dir |= tilde | .transcripts_glob |= tilde | .log_template |= tilde
+  | .repos |= map(tilde)
+  | with_entries(select(.value != null))
+' "$path"

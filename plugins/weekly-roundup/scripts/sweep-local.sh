@@ -3,6 +3,8 @@
 # Usage: sweep-local.sh START END   (YYYY-MM-DD, both inclusive)
 # Prints capped raw material per source, then a STATS block. Same inputs give the same output.
 set -u
+# Portable date math (no GNU/BSD date differences): ISO dates compare as strings.
+addday() { jq -rn --arg d "$1" --argjson n "${2:-1}" '$d|strptime("%Y-%m-%d")|mktime + 86400*$n|strftime("%Y-%m-%d")'; }
 start=$1; end=$2
 here=$(cd "$(dirname "$0")" && pwd)
 cfg=$("$here/config-json")
@@ -10,7 +12,7 @@ c() { jq -r "$1" <<<"$cfg"; }
 cap_commits=$(c '.caps.commits_per_repo'); cap_tkb=$(c '.caps.transcript_kb'); cap_ckb=$(c '.caps.clerk_kb')
 gh_user=$(c '.github_user // empty')
 if [ -n "$gh_user" ]; then GH_TOKEN=$(gh auth token --user "$gh_user" 2>/dev/null); export GH_TOKEN; fi
-end_next=$(date -j -v+1d -f %F "$end" +%F)
+end_next=$(addday "$end")
 stats=()
 
 echo "## GIT"
@@ -48,7 +50,7 @@ clerk=$(c '.clerk_dir // empty'); glob=$(c '.transcripts_glob'); skips=$(c '.ski
 # is read only when clerk has no summary for that session's project on that day.
 cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do jq -r --arg s "$(basename "$j" .json)" '"\(.cwd)\t\($s)"' "$j" 2>/dev/null; done )
 d=$start
-while [ "$(date -j -f %F "$d" +%s)" -le "$(date -j -f %F "$end" +%s)" ]; do
+while [[ ! "$d" > "$end" ]]; do
   dd=${d//-/}
   if [ -n "$clerk" ] && [ -d "$clerk/summary/$dd" ]; then
     for f in "$clerk/summary/$dd"/*.md; do
@@ -60,7 +62,7 @@ while [ "$(date -j -f %F "$d" +%s)" -le "$(date -j -f %F "$end" +%s)" ]; do
   fi
   # Transcripts touched that day (worktree sessions included: each has its own project dir).
   # shellcheck disable=SC2086
-  for t in $(find $(dirname "$glob") -maxdepth 1 -name '*.jsonl' -newermt "$d 00:00" ! -newermt "$(date -j -v+1d -f %F "$d" +%F) 00:00" 2>/dev/null); do
+  for t in $(find $(dirname "$glob") -maxdepth 1 -name '*.jsonl' -newermt "$d 00:00" ! -newermt "$(addday "$d") 00:00" 2>/dev/null); do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
     slug=$(awk -F'\t' -v c="$tcwd" '$1==c{print $2; exit}' <<<"$cwdmap")
@@ -73,7 +75,7 @@ while [ "$(date -j -f %F "$d" +%s)" -le "$(date -j -f %F "$end" +%s)" ]; do
     echo "### transcript $d $name"; head -c $((cap_tkb*1024)) <<<"$txt"; echo
     stats+=("transcript|$d $name|no clerk summary|$bytes B|$hit")
   done
-  d=$(date -j -v+1d -f %F "$d" +%F)
+  d=$(addday "$d")
 done
 
 echo "## STATS"

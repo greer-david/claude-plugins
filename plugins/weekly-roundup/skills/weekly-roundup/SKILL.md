@@ -10,10 +10,11 @@ One run per week, Friday morning by default. The output is one markdown log. Jir
 
 ## 0. Load config
 
-Read `~/.config/weekly-roundup/config.yaml`. If it's missing, copy `templates/config.example.yaml` there, ask the user to fill it in, and stop. Keys:
+Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roundup/config.json` with defaults merged in. If it fails because the file is missing, copy `templates/config.example.json` there, ask the user to fill it in, and stop. Keys:
 
 - `log_dir`: where weekly logs go (one file per week, named by the week's start date)
-- `rules_file`: the user's rules file (the template is `templates/rules.md`)
+- `team_rules_file`: shared team rules, kept in a team repo and changed by PR (optional)
+- `rules_file`: the user's personal rules (the template is `templates/rules.md`)
 - `log_template`: optional override for `templates/week.md`
 - `repos`: local repo paths; `github_repos`: `owner/name` for `gh`; `github_user`: the `gh` account to read with (its token is used without switching the active account)
 - `clerk_dir`: clerk `output.dir` (optional)
@@ -28,8 +29,6 @@ Read `~/.config/weekly-roundup/config.yaml`. If it's missing, copy `templates/co
 
 ## 1. Fix the window
 
-Run `scripts/config-json` (in the plugin root) to get the config with defaults.
-
 
 - Default: the week (from `week_start_day`) that contains today. If today is before the week's last day, the window ends now, and anything after the run lands in next week's log as **late from last week**.
 - An argument `YYYY-MM-DD` picks that week.
@@ -38,7 +37,7 @@ Run `scripts/config-json` (in the plugin root) to get the config with defaults.
 
 ## 2. Load rules
 
-Read `rules_file` completely. Every proposal below must follow it. Keep a list of the rule IDs you actually used; it goes into the log under `Rules applied`.
+Read `team_rules_file` (if set), then `rules_file`, completely. Every proposal below must follow both. When they conflict, the personal rule wins. Note the conflict under Gaps so the user can raise it with the team. If `team_rules_file` is set but missing, say so and continue with personal rules only. It usually means the team repo isn't pulled or the path is wrong. Keep a list of the rule IDs you actually used; it goes into the log under `Rules applied`.
 
 ## 3. Sweep sources
 
@@ -88,11 +87,11 @@ Show the user the path and the leadership summary, then ask for approvals in the
 
 ## 7. Learning step
 
-Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets, and "you missed X". For a miss, check the sweep stats: if a cap or budget was hit, or the item's sender is in a Dropped list, propose a **config change** (`budgets`, `caps`, `m365.noise_senders`) instead of a rule. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them to the rules file only after the user approves them. Never change rules silently.
+Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets, and "you missed X". For a miss, check the sweep stats: if a cap or budget was hit, or the item's sender is in a Dropped list, propose a **config change** (`budgets`, `caps`, `m365.noise_senders`) instead of a rule. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them only after the user approves them. Never change rules silently. `[personal]` rules go into `rules_file`. `[team]` rules are **never edited in place**: write the approved change as a ready-to-apply diff of `team_rules_file` in the log under Rule changes proposed, and tell the user to open a PR in the team repo.
 
 ## Calibration
 
-`--calibrate <manual-log-path>`: run as `--dry-run` for that log's week with a **full sweep** (ignore any existing log's `run_at`, and overwrite that log), then diff. Also read any `<log_dir>/calibration/<week-start>-*.md` files as additional ground truth. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.yaml` changes. Write nothing else.
+`--calibrate <manual-log-path>`: run as `--dry-run` for that log's week with a **full sweep** (ignore any existing log's `run_at`, and overwrite that log), then diff. Also read any `<log_dir>/calibration/<week-start>-*.md` files as additional ground truth. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.json` changes. Write nothing else.
 
 ## Hard rules
 

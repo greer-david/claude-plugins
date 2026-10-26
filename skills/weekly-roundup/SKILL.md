@@ -42,7 +42,8 @@ Run these in parallel (subagents are fine). Each finding carries: date, source, 
 2. **GitHub**: for each `github_repos` entry, run `gh pr list -R <repo> --author @me --state all --search "updated:>=<start>" --json number,title,state,mergedAt,url,headRefName`, plus `gh search prs --reviewed-by @me --updated ">=<start>"` for reviews.
 3. **Sessions**: the clerk summaries in `clerk_dir/summary/<YYYYMMDD>/*.md` for each day in the window. For any day with transcript activity (a `.jsonl` file modified that day) but no clerk summary, read those transcripts directly: the first user messages and the last assistant summary. Note under **Gaps** that clerk was behind. Skip `skip_projects`.
 4. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner.
-5. **Not yet available**: M365 (Teams, Outlook, calendar) and Claude web chats. List them under Gaps until a connector shows up in `/mcp`. If one appears, use it.
+5. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`): use `outlook_email_search` (sent and received), `outlook_calendar_search`, `chat_message_search`, `teams_list_chats` and `teams_list_channel_messages`, and `sharepoint_search` for files you edited. Look for work outside git: decks, access grants, stakeholder questions you answered, commitments made. If the tools aren't loaded, the session was started without connectors. Tell the user to restart with `env -u ENABLE_CLAUDEAI_MCP_SERVERS claude "/weekly-roundup"`, or carry on and list M365 under Gaps.
+6. **Not available**: Claude web chats. Always list them under Gaps.
 
 ## 4. Verify and classify
 
@@ -71,6 +72,8 @@ Show the user the path and the leadership summary, then ask for approvals in the
 Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them to the rules file only after the user approves them. Never change rules silently.
 
 ## Hard rules
+
+`hooks/guard.sh` enforces these outside the model: Microsoft 365 tools are on a read-only allow-list (everything else is denied), and every Jira/Confluence write needs a permission prompt. If the guard denies a call, don't look for another route; report it.
 
 - Never post, transition, create or link in Jira without approval in this run.
 - Never send email or messages. The leadership summary is text the user sends.

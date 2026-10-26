@@ -22,3 +22,4 @@ jq -rs --argjson b "$(jq '.budgets' <<<"$cfg")" '
 echo
 deny=$(jq -r 'select(.decision=="deny") | "- \(.tool|sub(".*__";"")): \(.reason)"' "$f" | sort | uniq -c)
 [ -n "$deny" ] && { echo "Denied calls:"; echo "$deny"; }
+exit 0

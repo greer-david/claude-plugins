@@ -28,6 +28,10 @@ jira_posted: 0
 
 - [ ] {{finding}} (pending verification with {{reviewers}})
 
+## Possibly fell through the cracks
+
+- [ ] {{who}} · {{date}} · {{ask}} ([email/Teams link])
+
 ## Jira proposals
 
 ### Review closely

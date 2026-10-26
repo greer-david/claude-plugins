@@ -22,6 +22,8 @@ Read `~/.config/weekly-roundup/config.yaml`. If it's missing, copy `templates/co
 - `jira`: `site`, `project`, `user` (display name)
 - `week_start_day`: `sunday` by default
 - `reviewers`: the names used in wording rules
+- `caps`: `findings_per_source` (40), `transcript_kb` (20), `emails` (150), `meetings` (60), `teams_threads` (60)
+- `m365`: `noise_senders` (substrings or domains to drop), `mute_chats` (chat or channel names to skip)
 
 ## 1. Fix the window
 
@@ -36,21 +38,33 @@ Read `rules_file` completely. Every proposal below must follow it. Keep a list o
 
 ## 3. Sweep sources
 
-Run these in parallel (subagents are fine). Each finding carries: date, source, repo or project, PR or ticket refs, a one-line outcome, and whether it's done or in progress.
+Each source is swept by its own subagent on **Haiku** (`model: haiku`), all in parallel. Raw data stays inside the subagent. Each one returns at most `caps.findings_per_source` findings, one line each:
+
+`date | source | repo/project | refs (PR #, PBI-###, person) | one-line outcome | done / in progress / open`
+
+If a cap cuts results short, the subagent says so on its last line; record that under **Gaps**. If this week's log already exists, sweep only activity after its `run_at`.
 
 1. **Git**: for each `repos` path, run `git log --all --author="$(git config user.email)" --since=<start> --until=<end> --format='%h %ad %s' --date=short`.
 2. **GitHub**: for each `github_repos` entry, run `gh pr list -R <repo> --author @me --state all --search "updated:>=<start>" --json number,title,state,mergedAt,url,headRefName`, plus `gh search prs --reviewed-by @me --updated ">=<start>"` for reviews.
-3. **Sessions**: the clerk summaries in `clerk_dir/summary/<YYYYMMDD>/*.md` for each day in the window. For any day with transcript activity (a `.jsonl` file modified that day) but no clerk summary, read those transcripts directly: the first user messages and the last assistant summary. Note under **Gaps** that clerk was behind. Skip `skip_projects`.
-4. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner.
-5. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`): use `outlook_email_search` (sent and received), `outlook_calendar_search`, `chat_message_search`, `teams_list_chats` and `teams_list_channel_messages`, and `sharepoint_search` for files you edited. Look for work outside git: decks, access grants, stakeholder questions you answered, commitments made. If the tools aren't loaded, the session was started without connectors. Tell the user to restart with `env -u ENABLE_CLAUDEAI_MCP_SERVERS claude "/weekly-roundup"`, or carry on and list M365 under Gaps.
+3. **Sessions**: the clerk summaries in `clerk_dir/summary/<YYYYMMDD>/*.md` for each day in the window. For any day with transcript activity (a `.jsonl` file modified that day) but no clerk summary, read those transcripts directly, but only the user turns and the final assistant message, up to `caps.transcript_kb` per session (use `jq`, never the whole file). Note under **Gaps** that clerk was behind. Skip `skip_projects`.
+4. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner, and nothing else.
+5. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`, read tools only). If the tools aren't loaded, the session was started without connectors. Tell the user to restart with `env -u ENABLE_CLAUDEAI_MCP_SERVERS claude "/weekly-roundup"`, or carry on and list M365 under Gaps. Split it across three subagents:
+   - **Email** (`outlook_email_search`, window only): everything the user sent, and everything received from real people or real groups/distribution lists. Drop automated mail: senders matching `m365.noise_senders`, no-reply addresses, notifications, newsletters, calendar notices, delivery reports. Read at most `caps.emails` messages, newest first, previews before full bodies. Return two kinds of findings: **work done** (what the user delivered, decided or answered) and **possibly missed** (asks, questions or commitments addressed to the user with no reply from them in the thread).
+   - **Calendar** (`outlook_calendar_search`): meetings the user attended or organized. Skip all-day, OOO, declined and cancelled events. At most `caps.meetings`.
+   - **Teams** (`chat_message_search`, `teams_list_chats`, `teams_list_channel_messages`): chats and channels with activity in the window from real people. Skip `m365.mute_chats` and bot posts. At most `caps.teams_threads` threads. Same two kinds of findings as email.
+   - Also run `sharepoint_search` for files the user edited in the window (decks, docs), at most 20 results.
 6. **Not available**: Claude web chats. Always list them under Gaps.
 
 ## 4. Verify and classify
+
+This step and step 5 run in the main session, which only ever sees the findings lines.
+
 
 - Check every PR's scope and state with `gh pr view` before you describe it. Don't trust session summaries for scope.
 - Group the findings by theme (one theme per model, epic or workstream).
 - Classify after-hours and weekend items with the classification rules. Ambiguous items go into the review as questions, never guesses.
 - Drop small items according to the scope rules.
+- **Possibly missed** findings go into their own log section and never become Jira rows directly. The user decides what to do with them.
 
 ## 5. Write the log
 

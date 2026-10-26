@@ -15,3 +15,12 @@ jira:
   project: PBI
   user: Your Name
 reviewers: [Jacob, Hunter]
+caps:
+  findings_per_source: 40
+  transcript_kb: 20
+  emails: 150
+  meetings: 60
+  teams_threads: 60
+m365:
+  noise_senders: [noreply, no-reply, donotreply, notifications, mailer-daemon]
+  mute_chats: []

@@ -16,6 +16,7 @@
     "chat_message_search": 24, "teams_list_channel_messages": 10, "sharepoint_search": 5, "default": 3
   },
   "max_window_days": 8,
+  "gap_days": 14,
   "m365": {
     "include_self_chat": true,
     "noise_senders": ["noreply", "no-reply", "donotreply", "notifications", "mailer-daemon", "atlassian.net", "github.com"],

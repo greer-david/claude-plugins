@@ -16,11 +16,11 @@ _Avoid_: Run date
 Sunday through Saturday. Each week has at most one log.
 
 **Window**:
-The span a run sweeps: from the previous run time to this run time. With no previous log, it starts at this week's Sunday.
+The span a run sweeps: from where the previous log's window ended to this run time. With no previous log, it starts at this week's Sunday.
 _Avoid_: Range, period
 
 **Late item**:
-Something in the window dated before the current week, i.e. after the previous run but before this Sunday.
+Something in the window dated before the current week: after the previous window ended but before this Sunday.
 _Avoid_: Carryover, late from last week
 
 **Carried item**:

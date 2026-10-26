@@ -1,7 +1,7 @@
 ---
 name: weekly-roundup
 description: Build the weekly work log (Sun–Sat) and propose Jira updates for approval. Sweeps git/gh, Claude Code sessions (clerk summaries, raw transcripts as fallback) and Jira, applies the user's rules file, and posts nothing without row-by-row approval. Invoke on "/weekly-roundup", "weekly roundup", "what did I do this week", "draft my weekly update", "propose Jira updates for this week".
-argument-hint: "[week-start YYYY-MM-DD] [--dry-run] [--calibrate <manual-log>]"
+argument-hint: "[week-start YYYY-MM-DD | --since DATE-OR-ISO] [--dry-run] [--calibrate <manual-log>]"
 ---
 
 # Weekly roundup
@@ -22,17 +22,20 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 - `skip_projects`: transcript or clerk slugs to ignore (substring match)
 - `jira`: `site`, `project`, `user` (display name)
 - `week_start_day`: `sunday` by default
+- `gap_days`: if the previous log's window ended more than this many days ago (14), the run starts at this week's start instead
 - `reviewers`: the names used in wording rules
 - `caps`: `transcript_kb` (96), `clerk_kb` (60), `commits_per_repo` (100), enforced by `scripts/sweep-local.sh`; `findings_per_source` (40), a limit for the sweep subagents. `scripts/config-json` rejects invalid values.
-- `budgets`: maximum calls per M365 tool per run (e.g. `outlook_email_search: 12`, `read_resource: 40`, `default: 3`); `max_window_days` (8). Enforced by `hooks/guard.sh`.
+- `budgets`: maximum calls per M365 tool per run (e.g. `outlook_email_search: 12`, `read_resource: 40`, `default: 3`); `max_window_days` (8). Enforced by `hooks/guard.sh`, which also denies searches outside the run's window.
 - `m365`: `include_self_chat` (true), `noise_senders` (sender substrings or domains to drop), `mute_chats` (chat IDs to skip, e.g. `19:abc@thread.v2`; names are rejected), `alert_patterns` (subject substrings of automated mail to keep instead of drop). In a roundup run `hooks/record.sh` applies these three to email and chat search results in code, before you see them.
 
 ## 1. Fix the window
 
+Run `scripts/start-run.sh` first, before any sweep. It records the run time and the window in code, once per run, and prints them as JSON (`run_at`, `week_start`, `window_start`, `window_end`, `reason`, and `gap` if any). Never compute or change these yourself.
 
-- Default: the week (from `week_start_day`) that contains today. If today is before the week's last day, the window ends now, and anything after the run lands in next week's log as **late from last week**.
-- An argument `YYYY-MM-DD` picks that week.
-- Read the previous week's log (if any) and carry forward its open **Pending verification** items, the Jira rows it left unposted, and anything after its run time.
+- Default: from where the previous log's window ended to now, so every moment is swept exactly once. With no previous log, or one more than `gap_days` (14) old, it starts at this week's start, and the uncovered span (`gap`) goes under Gaps.
+- An argument `YYYY-MM-DD` runs `start-run.sh --week YYYY-MM-DD` (that whole week). `--since DATE-OR-ISO` passes through to `start-run.sh --since`.
+- The log is `<log_dir>/<week_start>.md`. Items dated before `week_start` are **late items**: put them in this log, marked late; never rewrite an older log. The local sweep marks them `[late]`; for Jira and M365 findings, compare the date yourself.
+- Read the previous log (if any) and bring forward its **carried items**: open **Pending verification** items and Jira proposals it left unposted.
 - If a log for this window already exists, update it in place. Never duplicate rows; keep the posted/skipped marks.
 
 ## 2. Load rules
@@ -45,12 +48,12 @@ Each source is swept by its own subagent on **Haiku** (`model: haiku`), all in p
 
 `date | source | repo/project | refs (PR #, KEY-###, person) | one-line outcome | done / in progress / open`
 
-If this week's log already exists, sweep only activity after its `run_at`.
+Every source sweeps exactly the window from step 1 (`window_start` to `window_end`).
 
-1. **Local (git, GitHub, sessions)**: one subagent runs `scripts/sweep-local.sh <start> <end>` and turns its output into findings. The script is the only way to read these sources. Don't run your own `git log`, `gh` or transcript reads. It dedupes commits across worktrees, uses clerk summaries and falls back to transcripts (user turns plus final reply), and applies the size caps (`transcript_kb`, `clerk_kb`, `commits_per_repo`) in code. Return its `## STATS` block verbatim along with the findings.
-2. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner, and nothing else.
+1. **Local (git, GitHub, sessions)**: one subagent runs `scripts/sweep-local.sh` (no arguments: it reads the run's window) and turns its output into findings. The script is the only way to read these sources. Don't run your own `git log`, `gh` or transcript reads. It dedupes commits across worktrees, uses clerk summaries and falls back to transcripts (user turns plus final reply), and applies the size caps (`transcript_kb`, `clerk_kb`, `commits_per_repo`) in code. Return its `## STATS` block verbatim along with the findings.
+2. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= "<window_start in local time, yyyy-MM-dd HH:mm>"`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner, and nothing else.
 3. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`, read tools only). If the tools aren't loaded, the session was started without connectors. Tell the user to restart with the `roundup` alias (see the plugin README), or carry on and list M365 under Gaps. In a roundup run the guard hook enforces call budgets, and every search must pass ISO `afterDateTime`/`beforeDateTime` covering the window (max `max_window_days`). Plan calls to fit the budget: `limit: 25`, paging with `offset`. When a call is denied for budget, stop that source and note it under Gaps. The config filters (`noise_senders`, `mute_chats`, `alert_patterns`) are already applied to email and chat search results by the hook, which also counts what it dropped. Each M365 subagent returns a **Judgement drops** list only for what it dropped beyond that (sender or chat, count, reason, e.g. `newsletter@x.com · 3 · newsletter`). Split it across three subagents:
-   - **Email** (`outlook_email_search`, window only): everything the user sent, and everything received from real people or real groups/distribution lists. Drop remaining automated mail: no-reply addresses, notifications, newsletters, calendar notices, delivery reports. Search **all folders**: never set `folderName`, because mail filed to other folders is otherwise missed. **Fixed plan:** one query per day in the window (`afterDateTime` = that day, `beforeDateTime` = the next day, `query: "*"`, `limit: 25`), paged with `offset` until the response has no `nextOffset`. Don't stop early and don't summarize until every day is paged. Work from search previews; use `read_resource` only for threads that look like work done or a possibly-missed ask. Automated mail matching `m365.alert_patterns` (e.g. refresh failures) is not dropped; it goes under possibly missed. A possibly-missed ask needs the user in **To** or addressed by name. Asks where the user is only cc'd or that are addressed to a team or distribution list count as context, not possibly missed. Return two kinds of findings: **work done** (what the user delivered, decided or answered) and **possibly missed** (asks, questions or commitments addressed to the user with no reply from them in the thread).
+   - **Email** (`outlook_email_search`, window only): everything the user sent, and everything received from real people or real groups/distribution lists. Drop remaining automated mail: no-reply addresses, notifications, newsletters, calendar notices, delivery reports. Search **all folders**: never set `folderName`, because mail filed to other folders is otherwise missed. **Fixed plan:** one query per local day in the window (`afterDateTime` = that day, `beforeDateTime` = the next day, but `window_start` for the first day and `window_end` for the last, `query: "*"`, `limit: 25`), paged with `offset` until the response has no `nextOffset`. Don't stop early and don't summarize until every day is paged. Work from search previews; use `read_resource` only for threads that look like work done or a possibly-missed ask. Automated mail matching `m365.alert_patterns` (e.g. refresh failures) is not dropped; it goes under possibly missed. A possibly-missed ask needs the user in **To** or addressed by name. Asks where the user is only cc'd or that are addressed to a team or distribution list count as context, not possibly missed. Return two kinds of findings: **work done** (what the user delivered, decided or answered) and **possibly missed** (asks, questions or commitments addressed to the user with no reply from them in the thread).
    - **Calendar** (`outlook_calendar_search`): meetings the user attended or organized. Skip all-day, OOO, declined and cancelled events, personal blocks (lunch, focus time) and routine recurring meetings (stand-ups, office hours) unless the user presented or something was decided. 
    - **Teams** (`chat_message_search`, `teams_list_chats`, `teams_list_channel_messages`): chats and channels with activity in the window from real people. **Fixed plan:** one `chat_message_search` per day (`query: "*"`, day window, `limit: 25`), paged until no `nextOffset`. Skip bot posts (muted chats are already removed). Include the user's own notes-to-self chat (id `48:notes`, or the 1:1 chat whose only member is the user) when `m365.include_self_chat` is true (default): its messages are work done, open questions or plans, never possibly missed. `chat_message_search` already covers channels you're a member of. If `teams_list_teams` returns 403 (the connector lacks `Team.ReadBasic.All`), don't retry it or the channel tools; rely on search. Same two kinds of findings as email.
    - Also run `sharepoint_search` for documents modified in the window that the user authored **or** that came up in the email and Teams findings (by file name).
@@ -68,7 +71,7 @@ This step and step 5 run in the main session, which only ever sees the findings 
 
 ## 5. Write the log
 
-Fill in `templates/week.md` (or `log_template`), keeping the section order. Write it to `<log_dir>/<week-start>.md`. Fill in the frontmatter, including `jira_proposed` (the row count) and `jira_posted: 0`.
+Fill in `templates/week.md` (or `log_template`), keeping the section order. Write it to `<log_dir>/<week-start>.md`. Fill in the frontmatter: copy `run_at`, `week_start`, `window_start` and `window_end` exactly from `start-run.sh`, plus `jira_proposed` (the row count) and `jira_posted: 0`.
 
 After the M365 subagents return, run `scripts/run-stats.sh`. If it lists **unread pages**, send that subagent back to fetch them (within budget) before writing the log. Whatever is still unread goes under Gaps.
 
@@ -91,7 +94,7 @@ Look at what the user corrected: edited text, rejected rows, reclassified items,
 
 ## Calibration
 
-`--calibrate <manual-log-path>`: run as `--dry-run` for that log's week with a **full sweep** (ignore any existing log's `run_at`, and overwrite that log), then diff. Also read any `<log_dir>/calibration/<week-start>-*.md` files as additional ground truth. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.json` changes. Write nothing else.
+`--calibrate <manual-log-path>`: run as `--dry-run` with `start-run.sh --week <that log's week>` (a full sweep of that week; overwrite that week's log), then diff. Also read any `<log_dir>/calibration/<week-start>-*.md` files as additional ground truth. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.json` changes. Write nothing else.
 
 ## Hard rules
 

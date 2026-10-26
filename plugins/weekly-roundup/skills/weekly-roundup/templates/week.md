@@ -6,7 +6,9 @@ tags: []
 summary: "{{one_line}}"
 week_start: {{week_start}}
 week_end: {{week_end}}
-run_at: {{run_iso}}
+run_at: {{run_at}}
+window_start: {{window_start}}
+window_end: {{window_end}}
 jira_proposed: 0
 jira_posted: 0
 ---

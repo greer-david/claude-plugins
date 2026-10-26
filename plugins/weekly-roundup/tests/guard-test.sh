@@ -51,6 +51,19 @@ expect "no jq: escaped name blocked"          block '{"tool_name":"mcp__claude_a
 expect "no jq: any MCP call blocked"          block '{"tool_name":"mcp__clerk__clerk-resume"}' PATH="$tmp/bin" "${H[@]}"
 
 echo "-- roundup run"
+st="$tmp/home/.local/state/weekly-roundup"; mkdir -p "$st/r1" "$st/w1"
+wj() { printf '{"run_at":"%s","week_start":"2026-10-18","window_start":"%s","window_end":"%s"}\n' "$2" "$1" "$2"; }
+wj 2026-10-18T05:00:00Z 2026-10-25T05:00:00Z >"$st/r1/window.json"
+wj 2026-10-23T14:00:00Z 2026-10-30T14:00:00Z >"$st/w1/window.json"
+search() { echo "{\"tool_name\":\"${M}chat_message_search\",\"tool_input\":{\"afterDateTime\":\"$1\",\"beforeDateTime\":\"$2\"}}"; }
+expect "no window for the run"                deny  "$(search 2026-10-18 2026-10-19)" "${R[@]}" WEEKLY_ROUNDUP_RUN=nowin
+expect "search inside the window"             allow "$(search 2026-10-26 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "local day before start (slack)"       allow "$(search 2026-10-23T00:00:00-05:00 2026-10-24T00:00:00-05:00)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "day after end (slack)"                allow "$(search 2026-10-30 2026-10-31)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "search before the window"             deny  "$(search 2026-10-20 2026-10-21)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "search after the window"              deny  "$(search 2026-11-02 2026-11-03)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+printf 'garbage\n' >"$st/w1/window.json"
+expect "corrupt window denies"                deny  "$(search 2026-10-26 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
 expect "search without dates"                 deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"query\":\"*\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "natural-language dates"               deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"last week\",\"beforeDateTime\":\"today\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "malformed date suffix"                deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-18junk\",\"beforeDateTime\":\"2026-10-20\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1

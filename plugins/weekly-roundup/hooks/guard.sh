@@ -82,7 +82,10 @@ cfg=$("$here/../scripts/config-json" 2>/dev/null) || decide deny "can't read a v
 # Date window: full ISO values (date, or date + time with optional Z/offset), compared as instants.
 case "$name" in
   outlook_email_search|outlook_calendar_search|chat_message_search|sharepoint_search|sharepoint_folder_search)
-    span=$(jq -r --argjson max "$(jq '.max_window_days' <<<"$cfg")" '
+    # The run's window (scripts/start-run.sh), with a day of slack each side for local-time day queries.
+    win=$(jq -c '[.window_start, .window_end] | map(fromdateiso8601)' "$state/window.json" 2>/dev/null) \
+      || decide deny "this run has no window yet; run scripts/start-run.sh first"
+    span=$(jq -r --argjson max "$(jq '.max_window_days' <<<"$cfg")" --argjson win "$win" '
       def inst:
         (. // "") | capture("^(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})(T(?<t>[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?)(?<z>Z|[+-][0-9]{2}:[0-9]{2})?)?$")
         | (.d | strptime("%Y-%m-%d") | mktime)
@@ -90,10 +93,12 @@ case "$name" in
           - (if .z and .z != "Z" then ((.z[0:1] + "1") | tonumber) * ((.z[1:3]|tonumber)*3600 + (.z[4:6]|tonumber)*60) else 0 end);
       (.tool_input.afterDateTime | inst) as $a | (.tool_input.beforeDateTime | inst) as $b
       | ($b - $a) as $s
-      | if $s >= 0 and $s <= $max * 86400 then "ok" else "\(($s / 3600) | floor) hours (max \($max) days)" end
+      | if $s < 0 or $s > $max * 86400 then "date window is \(($s / 3600) | floor) hours (max \($max) days)"
+        elif $a < $win[0] - 86400 or $b > $win[1] + 86400 then "search falls outside the run window (\($win[0] | todate) to \($win[1] | todate))"
+        else "ok" end
     ' <<<"$input" 2>/dev/null)
     [ -n "$span" ] || decide deny "$name needs ISO afterDateTime and beforeDateTime (e.g. 2026-10-18 or 2026-10-18T00:00:00-05:00) in a roundup run"
-    [ "$span" = ok ] || decide deny "date window is $span"
+    [ "$span" = ok ] || decide deny "$span"
     ;;
 esac
 

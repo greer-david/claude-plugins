@@ -1,7 +1,7 @@
 {
   "name": "weekly-roundup",
   "owner": { "name": "David Greer" },
-  "metadata": { "description": "Weekly work roundup for Claude Code", "version": "0.3.0" },
+  "metadata": { "description": "Weekly work roundup for Claude Code", "version": "0.3.1" },
   "plugins": [
     { "name": "weekly-roundup", "source": "./", "description": "Weekly work log + approved Jira updates." }
   ]

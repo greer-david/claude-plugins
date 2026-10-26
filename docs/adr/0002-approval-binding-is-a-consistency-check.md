@@ -1,0 +1,3 @@
+# Approval binding is a consistency check; the permission prompt is the human approval
+
+In a run, the guard denies any Atlassian write whose action, ticket and content don't hash-match a proposal approved with a message that is exactly `post <numbers>`. That binding stops the model from posting text the user never saw in the log, but it doesn't prove a human approved it: UserPromptSubmit hooks also fire on subagent reports and messages from other sessions. So every Jira write still goes through the permission prompt, which is the only approval that definitely comes from the user. Don't remove the prompt because the binding exists.

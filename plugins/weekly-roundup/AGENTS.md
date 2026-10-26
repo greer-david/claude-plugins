@@ -8,6 +8,7 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `skills/weekly-roundup/templates/`: `config.example.json`, `rules.md` (personal rules starter), `team-rules.md` (team rules starter), `week.md` (log template)
 - `hooks/guard.sh`: PreToolUse on `mcp__.*`, the deterministic hard rules
 - `hooks/approve.sh`: UserPromptSubmit; in a run, turns a prompt that is exactly `post <numbers>` into approvals (the exact Jira write each named proposal shows) in the run's `approvals.jsonl`
+- `hooks/lib.sh`: sourced by the hooks; `classify` (tool name to m365/atlassian and tool key, one rule for guard and recorder) and `take_lock` (the run lock: an `ln -s` symlink naming its holder; a dead holder's lock is reclaimed under a second lock and only if unchanged)
 - `hooks/record.sh`: PostToolUse on MCP tools; for M365 and Atlassian, the call record for roundup runs (result bytes feed the guard's `budgets.total_kb` ceiling), and the noise filter (`noise_senders`, `alert_patterns`, `mute_chats` by chat ID) that rewrites email and chat search results via `updatedMCPToolOutput` and records Dropped counts
 - `scripts/config-json`: config plus defaults as JSON
 - `scripts/start-run.sh [--week D | --since X]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it

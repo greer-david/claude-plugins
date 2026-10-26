@@ -69,14 +69,8 @@ res=$(jq -Rs --arg list "$list" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
 ' "$log" 2>/dev/null) || say "couldn't read the proposals in $log; nothing approved."
 
 # Same lock as the guard, so approvals and their use don't interleave.
-mkdir -p "$state" || say "can't write $state; nothing approved."
-lock="$state/.lock"; got=
-for _ in $(seq 1 100); do
-  if mkdir "$lock" 2>/dev/null; then echo $$ >"$lock/pid"; got=1; break; fi
-  sleep 0.05
-done
-[ -n "$got" ] || say "couldn't lock the approvals file; nothing approved."
-trap 'rm -rf "$lock"' EXIT
+. "$here/lib.sh" || say "can't load hooks/lib.sh; nothing approved."
+take_lock || say "couldn't lock the approvals file ($state/.run.lock*; remove it if no roundup is running); nothing approved."
 # A new approval of N replaces any earlier unused one (e.g. for text edited since).
 if [ -s "$state/approvals.jsonl" ]; then
   jq -c --argjson new "$(jq -c '[.ok[].n]' <<<"$res")" 'if (.used | not) and (.n | IN($new[])) then .used = "superseded" else . end' \

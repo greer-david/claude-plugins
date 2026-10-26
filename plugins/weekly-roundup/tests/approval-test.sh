@@ -94,4 +94,12 @@ out=$(WEEKLY_ROUNDUP_RUN= bash -c "jq -nc '{tool_name:\"${A}addCommentToJiraIssu
 [ "$out" = ask ] && ok "outside a run: writes still just ask" || bad "outside a run" "$out"
 printf 'garbage\n' >>"$st/approvals.jsonl"
 expect "corrupt approvals file denies"     deny addCommentToJiraIssue "$c1"
+# A lock left by a killed hook is reclaimed; a live one is not taken (shared take_lock in hooks/lib.sh).
+rm -f "$st/approvals.jsonl"; ln -s "pid.$(bash -c 'echo $$').1" "$st/.run.lock"
+msg=$(say 'post 1')
+grep -q "approved for one write each: 1 (comment)" <<<"$msg" && ok "stale lock reclaimed for approvals" || bad "stale lock" "$msg"
+sleep 30 & live=$!; ln -s "pid.$live.1" "$st/.run.lock"
+msg=$(say 'post 2')
+grep -q "couldn't lock the approvals file" <<<"$msg" && [ "$(readlink "$st/.run.lock")" = "pid.$live.1" ] && ok "live lock not taken for approvals" || bad "live lock" "$msg"
+kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$st/.run.lock"
 exit $fail

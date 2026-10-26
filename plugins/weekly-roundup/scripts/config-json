@@ -36,13 +36,18 @@ jq -e --arg home "$HOME" '
       (if (.week_start_day | IN("sunday","monday","tuesday","wednesday","thursday","friday","saturday")) | not then "week_start_day must be a weekday name" else empty end),
       (if (.max_window_days | int_in(1; 31)) | not then "max_window_days must be a whole number from 1 to 31" else empty end),
       (if (.gap_days | int_in(1; 366)) | not then "gap_days must be a whole number from 1 to 366" else empty end),
-      (.budgets | del(.total_kb) | to_entries[] | select(.value | int_in(0; 1000) | not) | "budgets.\(.key) must be a whole number from 0 to 1000"),
-      (if (.budgets.total_kb | int_in(1; 100000)) | not then "budgets.total_kb must be a whole number from 1 to 100000" else empty end),
-      (.caps | to_entries[] | select(.value | int_in(1; 100000) | not) | "caps.\(.key) must be a whole number from 1 to 100000"),
+      (if (.budgets | type) != "object" then "budgets must be an object of tool: calls"
+       else (.budgets | del(.total_kb) | to_entries[] | select(.value | int_in(0; 1000) | not) | "budgets.\(.key) must be a whole number from 0 to 1000"),
+            (if (.budgets.total_kb | int_in(1; 100000)) | not then "budgets.total_kb must be a whole number from 1 to 100000" else empty end) end),
+      (if (.caps | type) != "object" then "caps must be an object of name: limit"
+       else (.caps | to_entries[] | select(.value | int_in(1; 100000) | not) | "caps.\(.key) must be a whole number from 1 to 100000") end),
+      (if (.transcripts_dir | type) != "string" then "transcripts_dir must be a path" else empty end),
+      (.clerk_dir, .log_template | select(. != null and type != "string") | "clerk_dir and log_template must be paths"),
       (if (.repos | strs) and (.github_repos | strs) and (.skip_projects | strs) then empty else "repos, github_repos and skip_projects must be lists of strings" end),
-      (if (.m365.noise_senders | strs) and (.m365.mute_chats | strs) and (.m365.alert_patterns | strs) then empty else "m365 lists must be lists of strings" end),
-      (.m365.mute_chats[]? | strings | select(test("^[0-9]+:[^ ]+$") | not) | "m365.mute_chats takes chat IDs (like 19:abc@thread.v2), not names: \(.)"),
-      (if (.m365.include_self_chat | type) != "boolean" then "m365.include_self_chat must be true or false" else empty end)
+      (if (.m365 | type) != "object" then "m365 must be an object"
+       else (if (.m365.noise_senders | strs) and (.m365.mute_chats | strs) and (.m365.alert_patterns | strs) then empty else "m365 lists must be lists of strings" end),
+            (.m365.mute_chats[]? | strings | select(test("^[0-9]+:[^ ]+$") | not) | "m365.mute_chats takes chat IDs (like 19:abc@thread.v2), not names: \(.)"),
+            (if (.m365.include_self_chat | type) != "boolean" then "m365.include_self_chat must be true or false" else empty end) end)
     ] as $errs
   | if ($errs | length) > 0 then ("invalid config: " + ($errs | join("; ") + "\n") | halt_error(1)) else . end
 ' "$path"

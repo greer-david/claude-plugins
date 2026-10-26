@@ -40,4 +40,19 @@ out=$(bash scripts/run-stats.sh s)
 grep -q "searchjira\|searchJira" <<<"$out" && { echo "FAIL Atlassian kept out of the M365 table"; echo "$out"; fail=1; } || echo "ok   Atlassian kept out of the M365 table"
 grep -qE "Results read this run: .* KB of 1024 KB ceiling \\(M365 [0-9.]+ KB, Atlassian [0-9.]+ KB\\)" <<<"$out" && [ "$(jq -s '[.[] | select(.key == "atlassian:searchjiraissuesusingjql") | .bytes] | .[0] > 0' "$HOME/.local/state/weekly-roundup/s/calls.jsonl")" = true ] && echo "ok   total KB line with Atlassian" || { echo "FAIL total KB line"; echo "$out"; fail=1; }
 [ "$(grep -c . "$HOME/.local/state/weekly-roundup/s/calls.jsonl")" = 2 ] && echo "ok   unguarded MCP tools aren't recorded" || { echo "FAIL unguarded tool recorded"; fail=1; }
+# Error detection (#5): flags inside JSON text, "error" members, HTTP error text; not item text that mentions an error.
+errof() { jq -s '[.[] | select(.phase == "post")] | last | .error' "$HOME/.local/state/weekly-roundup/$1/calls.jsonl"; }
+erris() { # name run want(true|false)
+  [ "$(errof "$2")" = "$3" ] && echo "ok   $1" || { echo "FAIL $1: want error=$3"; fail=1; }; }
+page x1 teams_list_chats '{}' '{"isError":true,"message":"denied"}'; erris "isError inside JSON text" x1 true
+page x2 teams_list_chats '{}' '{"error":{"code":429,"message":"throttled"}}'; erris "error member inside JSON text" x2 true
+page x3 teams_list_chats '{}' 'HTTP 503 Service Unavailable'; erris "HTTP error text" x3 true
+page x4 teams_list_chats '{}' 'Request failed with status 403 Forbidden'; erris "status code in short text" x4 true
+page x5 outlook_email_search "$q}" '{"subject":"500 error on prod","summary":"we saw a 500 error"}'; erris "item mentioning an error isn't an error" x5 false
+page x6 teams_list_chats '{}' '[{"id":1}]'; erris "plain result isn't an error" x6 false
+# One classification for guard and recorder (#3): aliases and odd names are recorded under the guard's key.
+rec al "$(jq -nc '{tool_name:"mcp__M365__Teams_List_Chats", tool_input:{}, tool_response:{content:[{type:"text",text:"[]"}]}}')"
+rec al "$(jq -nc '{tool_name:"mcp__microsoft_365__a__b", tool_input:{}, tool_response:"x"}')"
+[ "$(jq -sr 'map(.key) | join(",")' "$HOME/.local/state/weekly-roundup/al/calls.jsonl")" = "m365:teams_list_chats,m365:__invalid__" ] \
+  && echo "ok   recorder keys match the guard's classification" || { echo "FAIL recorder keys"; cat "$HOME/.local/state/weekly-roundup/al/calls.jsonl"; fail=1; }
 exit $fail

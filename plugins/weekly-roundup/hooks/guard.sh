@@ -17,21 +17,12 @@ tool=$(jq -ser 'if length == 1 and (.[0] | type) == "object" and (.[0].tool_name
                 then .[0].tool_name else error("bad input") end' <<<"$input" 2>/dev/null) \
   || block "couldn't parse the tool call; blocked."
 
-# mcp__<server>__<tool>. Classify by server; compare the whole tool part, case-insensitively.
-lower=$(printf '%s' "$tool" | tr '[:upper:]' '[:lower:]')
-case "$lower" in mcp__*__*) ;; *) exit 0 ;; esac
-rest=${lower#mcp__}
-server=${rest%%__*}
-name=${rest#*__}
-case "$server" in
-  *microsoft*365*|*m365*)                 kind=m365 ;;
-  *atlassian*|*jira*|*confluence*|*rovo*) kind=atlassian ;;
-  *) exit 0 ;;
-esac
-# Guarded tool names never contain "__"; if one does, treat it as unknown.
-case "$name" in *__*) name="__invalid__" ;; esac
-
+# mcp__<server>__<tool>: classified by server (hooks/lib.sh, shared with record.sh); other tools pass.
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/lib.sh" || block "can't load hooks/lib.sh; blocked."
+classify "$tool"
+[ -n "$kind" ] || exit 0
+
 run=${WEEKLY_ROUNDUP_RUN:-}
 state="$HOME/.local/state/weekly-roundup/$run"
 key="$kind:$name"
@@ -63,19 +54,6 @@ ceiling() {
   [ "$kb" -lt "$cap" ] || decide deny "this run has read $kb KB of results (ceiling $cap KB). Work with what you have and note it under Gaps."
 }
 
-take_lock() {  # one lock per run for the call record and approvals; returns non-zero if not taken
-  mkdir -p "$state" 2>/dev/null || return 1
-  lock="$state/.lock"
-  for _ in $(seq 1 100); do
-    if mkdir "$lock" 2>/dev/null; then echo $$ >"$lock/pid"; trap 'rm -rf "$lock"' EXIT; return 0; fi
-    # Recover a lock left by a hook that was killed.
-    holder=$(cat "$lock/pid" 2>/dev/null)
-    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$lock"; continue; fi
-    sleep 0.05
-  done
-  return 1
-}
-
 if [ "$kind" = atlassian ]; then
   case "$name" in
     atlassianuserinfo|getaccessibleatlassianresources|discover|executeread|search|fetch|\
@@ -96,7 +74,7 @@ if [ "$kind" = atlassian ]; then
   esac
   # In a run, a write must match an unused approval from hooks/approve.sh exactly (one write each),
   # and then still asks: the permission prompt is the human approval (docs/adr/0002).
-  take_lock || block "couldn't lock the approvals; blocked."
+  take_lock || block "couldn't lock the approvals ($state/.run.lock*; remove it if no roundup is running); blocked."
   [ -f "$state/approvals.jsonl" ] || decide deny "no proposals are approved in this run (approve with: post <numbers>)"
   hit=$(jq -r --arg n "$name" --slurpfile apps "$state/approvals.jsonl" '
     def norm: gsub("\r"; "") | split("\n") | map(sub("[[:space:]]+$"; "")) | join("\n") | sub("^\\s+"; "") | sub("\\s+$"; "");
@@ -159,11 +137,16 @@ case "$name" in
     win=$(jq -c '[.window_start, .window_end] | map(fromdateiso8601)' "$state/window.json" 2>/dev/null) \
       || decide deny "this run has no window yet; run scripts/start-run.sh first"
     span=$(jq -r --argjson max "$(jq '.max_window_days' <<<"$cfg")" --argjson win "$win" '
+      # Date, or date + hh:mm[:ss[.fff]] with optional Z/offset (none means UTC). Impossible dates,
+      # times and offsets are errors (so the call is denied); fractions of a second are kept.
       def inst:
-        (. // "") | capture("^(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})(T(?<t>[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?)(?<z>Z|[+-][0-9]{2}:[0-9]{2})?)?$")
-        | (.d | strptime("%Y-%m-%d") | mktime)
-          + (if .t then (.t | split(":") | map(tonumber) | .[0]*3600 + .[1]*60 + ((.[2] // 0) | floor)) else 0 end)
-          - (if .z and .z != "Z" then ((.z[0:1] + "1") | tonumber) * ((.z[1:3]|tonumber)*3600 + (.z[4:6]|tonumber)*60) else 0 end);
+        (. // "") | capture("^(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})(T(?<h>[0-9]{2}):(?<m>[0-9]{2})(:(?<s>[0-9]{2})(?<f>[.][0-9]+)?)?(?<z>Z|(?<zs>[+-])(?<zh>[0-9]{2}):(?<zm>[0-9]{2}))?)?$")
+        | (.d | strptime("%Y-%m-%d") | mktime) as $day
+        | if ($day | strftime("%Y-%m-%d")) != .d then error("no such date") else . end
+        | [.h, .m, .s, .zh, .zm | . // "0" | tonumber] as [$h, $m, $s, $zh, $zm]
+        | if $h > 23 or $m > 59 or $s > 59 or $zh > 14 or $zm > 59 then error("bad time") else . end
+        | $day + $h * 3600 + $m * 60 + $s + ("0" + (.f // "") | tonumber)
+          - (if .zs then (.zs + "1" | tonumber) * ($zh * 3600 + $zm * 60) else 0 end);
       (.tool_input.afterDateTime | inst) as $a | (.tool_input.beforeDateTime | inst) as $b
       | ($b - $a) as $s
       | if $s < 0 or $s > $max * 86400 then "date window is \(($s / 3600) | floor) hours (max \($max) days)"
@@ -178,7 +161,7 @@ esac
 # Per-run budget, keyed on kind:tool. A mkdir lock makes count-and-record atomic across parallel hooks.
 budget=$(jq -r --arg t "$name" '.budgets[$t] // .budgets.default' <<<"$cfg")
 [[ $budget =~ ^[0-9]+$ ]] || decide deny "no valid budget for $name"
-take_lock || block "couldn't lock the call record; blocked."
+take_lock || block "couldn't lock the call record ($state/.run.lock*; remove it if no roundup is running); blocked."
 if [ -f "$state/calls.jsonl" ]; then
   used=$(jq -s --arg k "$key" '[.[] | select(.phase == "pre" and .key == $k and .decision == "allow")] | length' "$state/calls.jsonl" 2>/dev/null) \
     || decide deny "the call record is unreadable, so the budget can't be checked"

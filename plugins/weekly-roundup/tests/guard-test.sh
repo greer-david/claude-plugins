@@ -69,6 +69,13 @@ expect "natural-language dates"               deny  "{\"tool_name\":\"${M}outloo
 expect "malformed date suffix"                deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-18junk\",\"beforeDateTime\":\"2026-10-20\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "8 days 23 hours (max 8)"              deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-10T00:00:00Z\",\"beforeDateTime\":\"2026-10-18T23:00:00Z\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "offset times, 1 day"                  allow "{\"tool_name\":\"${M}chat_message_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-18T00:00:00-05:00\",\"beforeDateTime\":\"2026-10-19T00:00:00-05:00\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
+expect "Feb 30 is not a date"                  deny  "$(search 2026-02-30 2026-03-01)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "hour 99 is not a time"                deny  "$(search 2026-10-26T99:00:00Z 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "minute 60 is not a time"              deny  "$(search 2026-10-26T10:60Z 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "offset +99:99 is not an offset"       deny  "$(search 2026-10-26T10:00:00+99:99 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+mkdir -p "$st/fr"; cp "$st/r1/window.json" "$st/fr/"
+expect "fraction kept: 8 days + 0.5 s denied" deny  "$(search 2026-10-17T05:00:00Z 2026-10-25T05:00:00.5Z)" "${R[@]}" WEEKLY_ROUNDUP_RUN=fr
+expect "fraction kept: exactly 8 days allowed" allow "$(search 2026-10-17T05:00:00.5Z 2026-10-25T05:00:00.5Z)" "${R[@]}" WEEKLY_ROUNDUP_RUN=fr
 expect "folder search needs dates too"        deny  "{\"tool_name\":\"${M}sharepoint_folder_search\",\"tool_input\":{\"query\":\"x\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "in budget 1/2"                        allow "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{$win}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "in budget 2/2 via other prefix"       allow "{\"tool_name\":\"mcp__microsoft_365__outlook_email_search\",\"tool_input\":{$win}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
@@ -101,5 +108,31 @@ echo "-- parallel budget (get_me budget 3, 12 at once)"
 for i in $(seq 1 12); do (run_guard "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=par >"$tmp/par.$i"; echo $? >"$tmp/par.$i.rc") & done; wait
 allowed=0; for i in $(seq 1 12); do [ "$(cat "$tmp/par.$i.rc")" = 0 ] && [ ! -s "$tmp/par.$i" ] && allowed=$((allowed+1)); done
 if [ "$allowed" -eq 3 ]; then echo "ok   exactly 3 of 12 parallel calls allowed"; else echo "FAIL parallel: $allowed of 12 allowed (want 3)"; fail=1; fi
+
+echo "-- config validation"
+for bad in '"caps":[]' '"budgets":[]' '"transcripts_dir":5' '"clerk_dir":{}' '"m365":[]' '"budgets":{"default":"3"}'; do
+  jq ". + {$bad}" <<<"$cfgbase" >"$tmp/badcfg.json"
+  expect "config $bad denies"                 deny  "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/home" WEEKLY_ROUNDUP_CONFIG="$tmp/badcfg.json" WEEKLY_ROUNDUP_RUN=cf
+done
+
+echo "-- run lock"
+lk="$st/lk/.run.lock"; mkdir -p "$st/lk"
+dead() { bash -c 'echo $$'; }
+ln -s "pid.$(dead).1" "$lk"
+expect "lock of a dead hook is reclaimed"     allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
+[ ! -e "$lk" ] && [ ! -L "$lk" ] && echo "ok   lock released after the call" || { echo "FAIL lock left behind"; fail=1; }
+ln -s "garbage" "$lk"
+expect "malformed lock is reclaimed"          allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
+sleep 30 & live=$!
+ln -s "pid.$live.1" "$lk"
+expect "live lock is never taken"             block "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
+[ "$(readlink "$lk")" = "pid.$live.1" ] && echo "ok   live lock left in place" || { echo "FAIL live lock removed"; fail=1; }
+kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$lk"
+# A dead holder's lock and 12 hooks racing to reclaim it: the budget still holds, so no hook removed a live lock.
+ln -s "pid.$(dead).1" "$st/par2/.run.lock" 2>/dev/null || { mkdir -p "$st/par2"; ln -s "pid.$(dead).1" "$st/par2/.run.lock"; }
+for i in $(seq 1 12); do (run_guard "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=par2 >"$tmp/p2.$i"; echo $? >"$tmp/p2.$i.rc") & done; wait
+allowed=0; for i in $(seq 1 12); do [ "$(cat "$tmp/p2.$i.rc")" = 0 ] && [ ! -s "$tmp/p2.$i" ] && allowed=$((allowed+1)); done
+if [ "$allowed" -eq 3 ]; then echo "ok   racing reclaim of a stale lock: exactly 3 of 12 allowed"; else echo "FAIL racing reclaim: $allowed of 12 allowed (want 3)"; fail=1; fi
+[ "$(grep -c '"decision":"allow"' "$st/par2/calls.jsonl")" = 3 ] && echo "ok   racing reclaim: 3 allows recorded" || { echo "FAIL racing reclaim record"; fail=1; }
 
 exit $fail

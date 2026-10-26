@@ -12,18 +12,23 @@ here=$(cd "$(dirname "$0")" && pwd)
 state="$HOME/.local/state/weekly-roundup/$run"
 mkdir -p "$state" || exit 0
 input=$(cat)
+. "$here/lib.sh" || exit 0
+classify "$(jq -r '.tool_name // empty' <<<"$input" 2>/dev/null)"
+[ -n "$kind" ] || exit 0
 cfg=$("$here/../scripts/config-json" 2>/dev/null) || cfg=null
-out=$(jq -c --argjson cfg "$cfg" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+out=$(jq -c --arg kind "$kind" --arg name "$name" --argjson cfg "$cfg" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
   (.tool_response) as $r
-  | (.tool_name | ascii_downcase | ltrimstr("mcp__") | split("__")) as $p
-  | ($p[1:] | join("__")) as $name
-  | (if $p[0] | test("microsoft.*365|m365") then "m365" elif $p[0] | test("atlassian|jira|confluence|rovo") then "atlassian" else null end) as $kind
-  | if $kind == null then empty else . end
   # MCP results often carry JSON inside text content; look inside strings that parse as JSON too.
   | ([$r] + [$r | .. | strings | (try fromjson catch empty)]) as $docs
   | {ts: $ts, phase: "post", tool: .tool_name, key: ($kind + ":" + $name), agent: .agent_id,
      input: .tool_input,
-     error: ([$r | .. | objects | (.isError?, .is_error?)] | any(. == true)),
+     # An error: an isError flag anywhere (also in JSON inside text), an "error" member of the result
+     # or of a text block that is JSON, or a short text block that is not JSON and reads like an HTTP error.
+     error: (([$docs[] | .. | objects | (.isError?, .is_error?)] | any(. == true))
+            or any($docs[] | objects | .error? // null; . != null and . != false and . != "")
+            or any($r | .. | strings | select(length < 500 and (try fromjson catch null) == null);
+                   test("^\\s*(error\\b|http/?[0-9.]* [45][0-9]{2}\\b|[45][0-9]{2}\\b)"; "i")
+                   or test("\\b(401|403|404|408|429|5[0-9]{2})\\b.{0,40}(forbidden|unauthorized|not found|timeout|too many requests|error|unavailable)"; "i"))),
      next: ([$docs[] | .. | objects | (.nextOffset?, .nextCursor?) | select(. != null and . != "")] | first // null)} as $rec
 
   # Noise filter. Each text block holds one item as JSON; the last block holds paging info.

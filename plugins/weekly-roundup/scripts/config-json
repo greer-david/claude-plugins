@@ -39,6 +39,7 @@ jq -e --arg home "$HOME" '
       (.caps | to_entries[] | select(.value | int_in(1; 100000) | not) | "caps.\(.key) must be a whole number from 1 to 100000"),
       (if (.repos | strs) and (.github_repos | strs) and (.skip_projects | strs) then empty else "repos, github_repos and skip_projects must be lists of strings" end),
       (if (.m365.noise_senders | strs) and (.m365.mute_chats | strs) and (.m365.alert_patterns | strs) then empty else "m365 lists must be lists of strings" end),
+      (.m365.mute_chats[]? | strings | select(test("^[0-9]+:[^ ]+$") | not) | "m365.mute_chats takes chat IDs (like 19:abc@thread.v2), not names: \(.)"),
       (if (.m365.include_self_chat | type) != "boolean" then "m365.include_self_chat must be true or false" else empty end)
     ] as $errs
   | if ($errs | length) > 0 then ("invalid config: " + ($errs | join("; ") + "\n") | halt_error(1)) else . end

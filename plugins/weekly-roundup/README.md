@@ -17,7 +17,7 @@ The plugin adds a safety hook that runs in **all** your Claude Code sessions, no
 - **Every Jira or Confluence write asks you first**, even in auto mode.
 - If the hook can't run (for example, `jq` is missing), it **blocks** Microsoft 365 and Atlassian calls rather than letting them through.
 
-In roundup sessions it also limits how many Microsoft 365 calls each tool can make and keeps searches to the week being swept. It records every call so the log's stats come from code, not from the model.
+In roundup sessions it also limits how many Microsoft 365 calls each tool can make and keeps searches to the week being swept. It records every call so the log's stats come from code, not from the model, and removes mail and Teams messages that match your noise and mute settings before the model reads them.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Choose **user** scope.
 
-2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `/weekly-roundup` will offer to do this on first run.
+2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
 
 3. **Rules.**
    - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`, started from `templates/team-rules.md`) and change by PR. Point `team_rules_file` at your local clone.

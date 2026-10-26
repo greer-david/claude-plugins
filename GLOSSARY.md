@@ -32,7 +32,11 @@ One line a sweep returns about one piece of work or one possibly missed ask.
 _Avoid_: Result, item
 
 **Dropped**:
-Material a sweep filtered out as noise, counted by sender or chat and reason.
+Mail or chat messages removed by the user's noise and mute settings before the model saw them, counted by sender or chat and reason.
+
+**Judgement drop**:
+Something a sweep chose to leave out beyond the noise and mute settings, as reported by the model.
+_Avoid_: Dropped
 
 **Proposal**:
 A numbered row in the log proposing one Jira write (a comment, a status change, a new ticket or a link).

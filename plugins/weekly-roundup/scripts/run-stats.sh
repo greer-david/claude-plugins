@@ -32,6 +32,20 @@ unread=$(jq -rs '
       | .tool ]
   | group_by(.)[] | "- \(.[0] | sub(".*__"; "")): \(length) page\(if length == 1 then "" else "s" end) never fetched"' "$f")
 [ -n "$unread" ] && { echo "Unread pages (results said more exist; never fetched):"; echo "$unread"; echo; }
+dropped=$(jq -rs '
+  [.[] | select(.phase == "post") | .dropped[]?] | group_by([.who, .reason])
+  | map({who: .[0].who, reason: .[0].reason, count: (map(.count) | add)}) | sort_by(-.count)[]
+  | "| \(.who) | \(.count) | \(.reason) |"' "$f")
+unf=$(jq -s '[.[] | select(.phase == "post" and .filter == "unfiltered")] | length' "$f")
+if [ -n "$dropped" ] || [ "$unf" -gt 0 ]; then
+  echo "Dropped by the noise filter (from the hook record):"
+  echo
+  echo "| sender or chat | count | reason |"
+  echo "|---|---|---|"
+  [ -n "$dropped" ] && echo "$dropped"
+  echo
+  [ "$unf" -gt 0 ] && { echo "Incomplete: $unf result(s) couldn't be parsed and passed through unfiltered."; echo; }
+fi
 deny=$(jq -r 'select(.decision=="deny") | "- \(.tool|sub(".*__";"")): \(.reason)"' "$f" | sort | uniq -c)
 [ -n "$deny" ] && { echo "Denied calls:"; echo "$deny"; }
 exit 0

@@ -90,7 +90,7 @@ Look at what the user corrected: edited text, rejected rows, reclassified items,
 
 ## Calibration
 
-`--calibrate <manual-log-path>`: run as `--dry-run` for that log's week, then diff. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.yaml` changes. Write nothing else.
+`--calibrate <manual-log-path>`: run as `--dry-run` for that log's week with a **full sweep** (ignore any existing log's `run_at`, and overwrite that log), then diff. Also read any `<log_dir>/calibration/<week-start>-*.md` files as additional ground truth. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.yaml` changes. Write nothing else.
 
 ## Hard rules
 

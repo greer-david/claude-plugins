@@ -43,7 +43,7 @@ Read `team_rules_file` (if set), then `rules_file`, completely. Every proposal b
 
 Each source is swept by its own subagent on **Haiku** (`model: haiku`), all in parallel. Raw data stays inside the subagent. Each one returns at most `caps.findings_per_source` findings (a summarizing limit the subagent follows, not one enforced in code), one line each:
 
-`date | source | repo/project | refs (PR #, PBI-###, person) | one-line outcome | done / in progress / open`
+`date | source | repo/project | refs (PR #, KEY-###, person) | one-line outcome | done / in progress / open`
 
 If this week's log already exists, sweep only activity after its `run_at`.
 

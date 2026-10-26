@@ -20,7 +20,7 @@ jira_posted: 0
 ## Work by theme
 
 ### {{theme}}
-- {{outcome}} ([#PR](url), PBI-###)
+- {{outcome}} ([#PR](url), KEY-###)
 
 ## Side projects
 
@@ -36,7 +36,7 @@ jira_posted: 0
 
 ### Review closely
 
-**1. PBI-### · comment** · confidence: high · sources: #PR, session {{date}}
+**1. KEY-### · comment** · confidence: high · sources: #PR, session {{date}}
 > exact comment text
 
 ### Quick skim

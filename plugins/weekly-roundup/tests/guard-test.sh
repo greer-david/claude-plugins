@@ -110,7 +110,7 @@ allowed=0; for i in $(seq 1 12); do [ "$(cat "$tmp/par.$i.rc")" = 0 ] && [ ! -s 
 if [ "$allowed" -eq 3 ]; then echo "ok   exactly 3 of 12 parallel calls allowed"; else echo "FAIL parallel: $allowed of 12 allowed (want 3)"; fail=1; fi
 
 echo "-- config validation"
-for bad in '"caps":[]' '"budgets":[]' '"transcripts_dir":5' '"clerk_dir":{}' '"m365":[]' '"budgets":{"default":"3"}'; do
+for bad in '"caps":[]' '"budgets":[]' '"transcripts_dir":5' '"clerk_dir":{}' '"m365":[]' '"m365":{"my_addresses":"me@x.com"}' '"budgets":{"default":"3"}'; do
   jq ". + {$bad}" <<<"$cfgbase" >"$tmp/badcfg.json"
   expect "config $bad denies"                 deny  "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/home" WEEKLY_ROUNDUP_CONFIG="$tmp/badcfg.json" WEEKLY_ROUNDUP_RUN=cf
 done

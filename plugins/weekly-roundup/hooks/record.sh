@@ -5,6 +5,7 @@
 # sender matches m365.noise_senders (unless the subject matches m365.alert_patterns) or whose chat is
 # in m365.mute_chats (chat IDs) are removed before the model sees the result, and counted as dropped.
 # A result it can't parse passes through unchanged and is recorded as filter "unfiltered".
+# For read_resource emails it records the message and conversation IDs and whether the user is in To.
 run=${WEEKLY_ROUNDUP_RUN:-}
 [ -n "$run" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
@@ -30,6 +31,16 @@ out=$(jq -c --arg kind "$kind" --arg name "$name" --argjson cfg "$cfg" --arg ts 
                    test("^\\s*(error\\b|http/?[0-9.]* [45][0-9]{2}\\b|[45][0-9]{2}\\b)"; "i")
                    or test("\\b(401|403|404|408|429|5[0-9]{2})\\b.{0,40}(forbidden|unauthorized|not found|timeout|too many requests|error|unavailable)"; "i"))),
      next: ([$docs[] | .. | objects | (.nextOffset?, .nextCursor?) | select(. != null and . != "")] | first // null)} as $rec
+  # An opened email (read_resource): whether the user is in To (m365.my_addresses), and its IDs, so
+  # scripts/check-log.sh can hold each possibly-missed email to a message addressed to the user.
+  | ([$cfg.m365.my_addresses[]? | ascii_downcase]) as $mine
+  | (if $kind != "m365" or $name != "read_resource" then $rec
+     else ([$docs[] | objects | select(has("toRecipients"))] | first) as $msg
+     | if $msg == null then $rec
+       else $rec + {mail: {id: $msg.id, conversation: $msg.conversationId, uri: .tool_input.uri?,
+                    addressed: (if $mine == [] then "unknown"
+                                elif any($msg.toRecipients[]? | (.address? // .emailAddress?.address? // "") | ascii_downcase; IN($mine[]))
+                                then "to_me" else "not_to_me" end)}} end end) as $rec
 
   # Noise filter. Each text block holds one item as JSON; the last block holds paging info.
   | ($cfg.m365 // {}) as $m

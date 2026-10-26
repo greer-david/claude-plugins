@@ -1,6 +1,9 @@
 #!/bin/bash
 # Check a weekly log's window frontmatter against what scripts/start-run.sh recorded for this run.
-# Usage: check-log.sh LOG   (exit 1 with the mismatches if run_at, week_start or the window differ)
+# Usage: check-log.sh LOG   (exit 1 with the problems found)
+# Checks: run_at, week_start and the window match the run; every "Possibly fell through the cracks"
+# bullet ends with a source tag (email <message id> | teams | github | jira | calendar | other), and
+# every email one names a message this run opened (read_resource) with the user in To (hooks/record.sh).
 set -u
 log=${1:?usage: check-log.sh LOG}
 win="$HOME/.local/state/weekly-roundup/${WEEKLY_ROUNDUP_RUN:-}/window.json"
@@ -12,4 +15,23 @@ bad=$(jq -rn --argjson fm "$fm" --slurpfile w "$win" '
   [("run_at", "week_start", "window_start", "window_end") as $k
    | select($fm[$k] != $w[0][$k]) | "\($k): log has \($fm[$k] // "nothing"), run has \($w[0][$k])"] | .[]')
 [ -z "$bad" ] || { echo "check-log: $log doesn't match this run. Copy these from scripts/start-run.sh:"; echo "$bad"; exit 1; }
+calls="$HOME/.local/state/weekly-roundup/$WEEKLY_ROUNDUP_RUN/calls.jsonl"
+reads=$( [ -f "$calls" ] && jq -sc '[.[] | select(.phase == "post" and .mail != null) | .mail]' "$calls" 2>/dev/null || echo '[]')
+missed=$(jq -Rrs --argjson reads "${reads:-[]}" '
+  split("\n") as $l
+  | ($l | index("## Possibly fell through the cracks")) as $s
+  | if $s == null then empty else
+      ($l[$s + 1:] | (map(test("^## ")) | index(true)) as $e | if $e then .[:$e] else . end)
+      | .[] | select(test("^\\s*- ")) | . as $b
+      | (capture("· (?<src>email|teams|github|jira|calendar|other)\\b(?<rest>[^·]*)$") // null) as $t
+      | if $t == null then "no source tag (end with · email <message id>, · teams, · github, · jira, · calendar or · other): \($b)"
+        elif $t.src != "email" then empty
+        else ($t.rest | gsub("^\\s+|[\\s)]+$"; "") | sub("^\\(";"")) as $id
+          | ([$reads[] | select($id != "" and (.id == $id or .uri == $id))] | first) as $r
+          | if $id == "" then "email item without a message id: \($b)"
+            elif $r == null then "email \($id) wasn'"'"'t opened in this run (read_resource), so To can'"'"'t be checked: \($b)"
+            elif $r.addressed == "unknown" then "set m365.my_addresses in the config so To can be checked: \($b)"
+            elif $r.addressed != "to_me" then "the user isn'"'"'t in To on email \($id), so it isn'"'"'t possibly missed (context at most): \($b)"
+            else empty end end end' "$log")
+[ -z "$missed" ] || { echo "check-log: possibly-missed items in $log fail the rules:"; echo "$missed"; exit 1; }
 echo "check-log: ok"

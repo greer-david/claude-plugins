@@ -18,6 +18,7 @@
   "max_window_days": 8,
   "gap_days": 14,
   "m365": {
+    "my_addresses": ["you@your-company.com"],
     "include_self_chat": true,
     "noise_senders": ["noreply", "no-reply", "donotreply", "notifications", "mailer-daemon", "atlassian.net", "github.com"],
     "mute_chats": [],

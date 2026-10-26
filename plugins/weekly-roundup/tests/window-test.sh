@@ -58,4 +58,21 @@ WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && ba
 log w.md $'week_start: 2026-10-25\n'
 WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && bad "check-log: missing fields" || ok "check-log: missing fields"
 WEEKLY_ROUNDUP_RUN=none bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null 2>&1 && bad "check-log: no run window" || ok "check-log: no run window"
+# Possibly missed (#11): source tags, and email items must be opened messages with the user in To.
+echo "{\"log_dir\":\"$tmp/logs\",\"rules_file\":\"/tmp/r.md\",\"m365\":{\"my_addresses\":[\"Me@Example.com\"]}}" >"$tmp/c.json"
+opened() { # id to-address
+  jq -nc --arg id "$1" --arg to "$2" '{tool_name:"mcp__claude_ai_Microsoft_365__read_resource", tool_input:{uri:("mail:///messages/" + $id)},
+    tool_response:{content:[{type:"text",text:({id:$id, conversationId:"c1", toRecipients:[{name:"X", address:$to}], ccRecipients:[]} | tojson)}]}}' \
+  | WEEKLY_ROUNDUP_RUN=a bash hooks/record.sh >/dev/null; }
+opened AAA me@example.com; opened BBB someone@example.com
+pm() { log w.md "$good"$'---\n## Possibly fell through the cracks\n\n'"$1"$'\n\n## Jira proposals\n- not a missed item\n'; WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" 2>&1; }
+pm '- [ ] Ann · Oct 27 · asked for the deck · email AAA' >/dev/null && ok "check-log: email to the user passes" || bad "check-log: email to the user" "$(pm '- [ ] Ann · Oct 27 · asked for the deck · email AAA')"
+pm '- [ ] Ann · Oct 27 · asked · email mail:///messages/AAA' >/dev/null && ok "check-log: message uri accepted" || bad "check-log: uri"
+pm $'- [ ] Bo · Oct 28 · ping · teams [chat](https://x)\n- [ ] PR #7 review · github https://x/7' >/dev/null && ok "check-log: other sources pass" || bad "check-log: other sources"
+grep -q "isn't in To" <<<"$(pm '- [ ] Cy · Oct 27 · fyi · email BBB')" && ok "check-log: cc'd/other-To email fails" || bad "check-log: not-To email"
+grep -q "wasn't opened" <<<"$(pm '- [ ] Di · Oct 27 · ask · email ZZZ')" && ok "check-log: unopened email fails" || bad "check-log: unopened email"
+grep -q "no source tag" <<<"$(pm '- [ ] Ed · Oct 27 · ask (email)')" && ok "check-log: untagged item fails" || bad "check-log: untagged"
+grep -q "without a message id" <<<"$(pm '- [ ] Fa · Oct 27 · ask · email')" && ok "check-log: email without id fails" || bad "check-log: email without id"
+echo "{\"log_dir\":\"$tmp/logs\",\"rules_file\":\"/tmp/r.md\"}" >"$tmp/c.json"; opened CCC me@example.com
+grep -q "set m365.my_addresses" <<<"$(pm '- [ ] Gi · Oct 27 · ask · email CCC')" && ok "check-log: no my_addresses fails loudly" || bad "check-log: no my_addresses"
 exit $fail

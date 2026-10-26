@@ -37,7 +37,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Choose **user** scope.
 
-2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
+2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. Put your email addresses (aliases too) in `m365.my_addresses`: an email only counts as possibly missed when you're in its To line. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
 
 3. **Rules.**
    - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`, started from `templates/team-rules.md`) and change by PR. Point `team_rules_file` at your local clone.

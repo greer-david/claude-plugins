@@ -21,7 +21,7 @@ jq -e --arg home "$HOME" '
               teams_list_channels: 5, teams_list_channel_messages: 10, sharepoint_search: 5,
               search_people: 10, get_me: 2, default: 3, total_kb: 1024},
     max_window_days: 8, gap_days: 14,
-    m365: {include_self_chat: true, noise_senders: [], mute_chats: [], alert_patterns: []}
+    m365: {include_self_chat: true, noise_senders: [], mute_chats: [], alert_patterns: [], my_addresses: []}
   }; .)
   | .log_dir |= tilde | .rules_file |= tilde | .team_rules_file |= tilde
   | .clerk_dir |= tilde | .transcripts_dir |= tilde | .log_template |= tilde
@@ -45,7 +45,7 @@ jq -e --arg home "$HOME" '
       (.clerk_dir, .log_template | select(. != null and type != "string") | "clerk_dir and log_template must be paths"),
       (if (.repos | strs) and (.github_repos | strs) and (.skip_projects | strs) then empty else "repos, github_repos and skip_projects must be lists of strings" end),
       (if (.m365 | type) != "object" then "m365 must be an object"
-       else (if (.m365.noise_senders | strs) and (.m365.mute_chats | strs) and (.m365.alert_patterns | strs) then empty else "m365 lists must be lists of strings" end),
+       else (if (.m365.noise_senders | strs) and (.m365.mute_chats | strs) and (.m365.alert_patterns | strs) and (.m365.my_addresses | strs) then empty else "m365 lists must be lists of strings" end),
             (.m365.mute_chats[]? | strings | select(test("^[0-9]+:[^ ]+$") | not) | "m365.mute_chats takes chat IDs (like 19:abc@thread.v2), not names: \(.)"),
             (if (.m365.include_self_chat | type) != "boolean" then "m365.include_self_chat must be true or false" else empty end) end)
     ] as $errs

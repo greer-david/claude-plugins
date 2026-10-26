@@ -32,7 +32,8 @@ jira_posted: 0
 
 ## Possibly fell through the cracks
 
-- [ ] {{who}} · {{date}} · {{ask}} ([email/Teams link])
+- [ ] {{who}} · {{date}} · {{ask}} · email {{message id}}
+- [ ] {{who}} · {{date}} · {{ask}} · teams {{link}}
 
 ## Jira proposals
 

@@ -12,7 +12,7 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `hooks/record.sh`: PostToolUse on MCP tools; for M365 and Atlassian, the call record for roundup runs (result bytes feed the guard's `budgets.total_kb` ceiling), and the noise filter (`noise_senders`, `alert_patterns`, `mute_chats` by chat ID) that rewrites email and chat search results via `updatedMCPToolOutput` and records Dropped counts
 - `scripts/config-json`: config plus defaults as JSON
 - `scripts/start-run.sh [--week D | --since X]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it
-- `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window, with caps, `[late]` marks and a STATS block
+- `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
 - `scripts/check-log.sh LOG`: fails if the log's window frontmatter differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To
 - `scripts/calibration-check.sh REPORT BASELINE`: `--calibrate` coverage check (every baseline item has a row with an allowed result and cause) that writes the totals and run-stats into the report
 - `scripts/run-stats.sh [RUN]`: M365 call table, errors, unread pages and omitted days (window days no successful email or chat search covered) from the call record
@@ -22,6 +22,7 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `tests/calibration-test.sh`: calibration-check self-test
 - `tests/sweep-test.sh`: sweep-local GitHub sections with a stubbed `gh`
 - `tests/window-test.sh`: start-run window rules + check-log self-test
+- `tests/linux.sh`: runs every test in a Debian container (docker), as a non-root user
 - `tests/approval-test.sh`: approve.sh + guard approval binding self-test
 
 ## Invariants
@@ -34,4 +35,4 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 
 ## Releasing
 
-Bump `version` in `.claude-plugin/plugin.json` and in the root `.claude-plugin/marketplace.json` on every change. Installed copies refresh only when the version changes. Run every test in `tests/` before committing.
+Bump `version` in `.claude-plugin/plugin.json` and in the root `.claude-plugin/marketplace.json` on every change. Installed copies refresh only when the version changes. Run every test in `tests/` before committing (and `tests/linux.sh` when you touch shell or date code).

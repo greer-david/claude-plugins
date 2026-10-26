@@ -3,7 +3,7 @@
 Once a week, `/weekly-roundup` collects what you did and writes a log you can use for status updates and Jira. It looks at:
 
 - your git commits and GitHub PRs and reviews
-- your Claude Code sessions (clerk summaries if you use clerk, otherwise the session transcripts)
+- your Claude Code sessions (clerk summaries if you use clerk, otherwise the session transcripts) in your configured repos
 - Jira tickets you touched
 - Microsoft 365 (Outlook, calendar, Teams, SharePoint) through the claude.ai connector
 
@@ -67,4 +67,6 @@ Your corrections become rule proposals at the end of each run. Personal rules ar
 
 ## Privacy
 
-Everything stays on your machine. Each person sweeps only their own mail, Teams, repos and sessions. Logs go to the folder in your config; the call record goes to `~/.local/state/weekly-roundup/`.
+Your config, rules, logs and call record stay on your machine: logs go to the folder in your config, the call record to `~/.local/state/weekly-roundup/`. The run itself is not local. What it sweeps (mail, Teams, Jira, commits, session text) is sent to the model provider as part of the Claude Code session, and mail, Teams and Jira are read through their hosted connectors. Each person sweeps only their own sources.
+
+Sessions are swept only from the folders in `session_dirs` (default: your `repos`), so sessions in personal projects stay out. Set it to `["~"]` to include every session.

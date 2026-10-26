@@ -19,7 +19,8 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 - `repos`: local repo paths; `github_repos`: `owner/name` for `gh`; `github_user`: the `gh` account to read with (its token is used without switching the active account)
 - `clerk_dir`: clerk `output.dir` (optional)
 - `transcripts_dir`: default `~/.claude/projects`
-- `skip_projects`: transcript or clerk slugs to ignore (substring match)
+- `session_dirs`: folders whose Claude Code sessions are swept (a session counts if its working directory is one of them or inside one); default: `repos`. Other sessions are only counted in STATS. `["~"]` sweeps everything.
+- `skip_projects`: transcript or clerk slugs to ignore inside those (substring match)
 - `jira`: `site`, `project`, `user` (display name)
 - `week_start_day`: `sunday` by default
 - `gap_days`: if the previous log's window ended more than this many days ago (14), the run starts at this week's start instead

@@ -7,6 +7,7 @@
   "github_repos": ["your-org/your-main-repo"],
   "github_user": "",
   "clerk_dir": "",
+  "session_dirs": ["~/repos/your-main-repo"],
   "skip_projects": [],
   "jira": { "site": "your-site.atlassian.net", "project": "ABC", "user": "Your Name" },
   "reviewers": ["Reviewer One", "Reviewer Two"],

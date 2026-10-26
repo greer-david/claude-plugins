@@ -82,6 +82,10 @@ stats+=("github|review requests|$qst|$nreq|$([ "$nreq" -ge 100 ] && echo yes || 
 
 echo "## SESSIONS"
 clerk=$(c '.clerk_dir // empty'); tdir=$(c '.transcripts_dir'); skips=$(c '.skip_projects // [] | join("|")')
+# Allow-list: a session counts only if its cwd is a session_dirs entry or inside one. Others are
+# counted in STATS, never named, so personal projects don't leak into a work log.
+sdirs=$(c '.session_dirs[]'); nskip=0
+inside() { local d; [ -n "$1" ] || return 1; while IFS= read -r d; do d=${d%/}; [ -n "$d" ] || continue; case "$1" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
 # clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
 # is read only when clerk has no summary for that session's project on that day.
 cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do jq -r --arg s "$(basename "$j" .json)" '"\(.cwd)\t\($s)"' "$j" 2>/dev/null; done )
@@ -91,6 +95,8 @@ while [[ ! "$d" > "$end" ]]; do
   if [ -n "$clerk" ] && [ -d "$clerk/summary/$dd" ]; then
     for f in "$clerk/summary/$dd"/*.md; do
       [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$f")" && continue
+      scwd=$(awk -F'\t' -v s="$(basename "$f" .md)" '$2==s{print $1; exit}' <<<"$cwdmap")
+      inside "$scwd" || { nskip=$((nskip+1)); continue; }
       bytes=$(wc -c <"$f"); hit=no; [ "$bytes" -gt $((cap_ckb*1024)) ] && hit=yes
       echo "### $(late "$d")clerk $d $(basename "$f" .md)"; head -c $((cap_ckb*1024)) "$f"; echo
       stats+=("clerk|$d $(basename "$f" .md)|ok|$bytes B|$hit")
@@ -104,6 +110,7 @@ while [[ ! "$d" > "$end" ]]; do
   while IFS= read -r -d '' t; do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
+    inside "$tcwd" || { nskip=$((nskip+1)); continue; }
     slug=$(awk -F'\t' -v c="$tcwd" '$1==c{print $2; exit}' <<<"$cwdmap")
     [ -n "$slug" ] && [ -f "$clerk/summary/$dd/$slug.md" ] && continue
     txt=$( { jq -r 'select(.type=="user" and (.message.content|type)=="string") | "USER: " + .message.content' "$t" 2>/dev/null
@@ -117,6 +124,7 @@ while [[ ! "$d" > "$end" ]]; do
   d=$(addday "$d")
 done
 
+[ "$nskip" -gt 0 ] && stats+=("sessions|outside session_dirs|skipped|$nskip|-")
 echo "## STATS"
 echo "source|item|status|size|cap hit"
 printf '%s\n' "${stats[@]}"

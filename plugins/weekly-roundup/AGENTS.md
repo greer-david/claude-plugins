@@ -14,10 +14,12 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `scripts/start-run.sh [--week D | --since X]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it
 - `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window, with caps, `[late]` marks and a STATS block
 - `scripts/check-log.sh LOG`: fails if the log's window frontmatter differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To
+- `scripts/calibration-check.sh REPORT BASELINE`: `--calibrate` coverage check (every baseline item has a row with an allowed result and cause) that writes the totals and run-stats into the report
 - `scripts/run-stats.sh [RUN]`: M365 call table, errors, unread pages and omitted days (window days no successful email or chat search covered) from the call record
 - `tests/guard-test.sh`: guard self-test (classification, fail-closed, dates, parallel budgets)
 - `tests/stats-test.sh`: recorder (errors, classification) + unread-page and omitted-day detection self-test
 - `tests/filter-test.sh`: noise filter + Dropped table self-test
+- `tests/calibration-test.sh`: calibration-check self-test
 - `tests/sweep-test.sh`: sweep-local GitHub sections with a stubbed `gh`
 - `tests/window-test.sh`: start-run window rules + check-log self-test
 - `tests/approval-test.sh`: approve.sh + guard approval binding self-test

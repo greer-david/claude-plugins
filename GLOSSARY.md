@@ -31,6 +31,17 @@ _Avoid_: Carryover
 One line a sweep returns about one piece of work or one possibly missed ask.
 _Avoid_: Result, item
 
+**Possibly missed**:
+A finding about an ask addressed to the user that may still need a reply. For email, the user must be in To on a message the run opened.
+_Avoid_: Fell through the cracks
+
+**Baseline item**:
+One numbered thing (`B<n>`) a manual roundup reported for a week, listed once in that week's baseline file and reviewed by the user. Calibration measures the skill against these.
+_Avoid_: Ground truth line
+
+**Calibration report**:
+The file a `--calibrate` run writes: a row per baseline item (found, missed with its cause, or outside the overlap), the noise the skill added, proposed config changes, and totals written by code.
+
 **Dropped**:
 Mail or chat messages removed by the user's noise and mute settings before the model saw them, counted by sender or chat and reason.
 

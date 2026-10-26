@@ -102,7 +102,13 @@ Look at what the user corrected: edited text, rejected rows, reclassified items,
 
 ## Calibration
 
-`--calibrate <manual-log-path>`: run as `--dry-run` with `start-run.sh --week <that log's week>` (a full sweep of that week; overwrite that week's log), then diff. Also read any `<log_dir>/calibration/<week-start>-*.md` files as additional ground truth. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.json` changes. Write nothing else.
+`--calibrate <manual-log-path>`: run as `--dry-run` with `start-run.sh --week <that log's week>` (a full sweep of that week; overwrite that week's log). Nothing goes to Jira. Then:
+
+1. **Baseline items.** If `<log_dir>/calibration/<week-start>-baseline.md` doesn't exist, write it from the manual log and any other `<log_dir>/calibration/<week-start>-*.md` ground truth (e.g. a Jira truth file): one line per item the manual roundup reported, `- B<n> · <source> · <one-line summary with its date>`. Stop and ask the user to review it before going on. If it exists, use it as it is; never renumber or edit it.
+2. **Report.** Write `<log_dir>/calibration/<week-start>-report.md`: the two windows (manual and this run), then one table row per baseline item, `| B<n> | found / missed / outside-overlap | <the skill's matching item> | <what hid it> |`. `outside-overlap` is for items dated outside this run's window; they aren't counted. A missed item names what hid it per the sweep stats: `cap`, `budget`, `ceiling`, `filter`, `omitted day`, `unread page`, `judgement` or `not swept`. Then a table of items the skill added that look like noise, `| N<n> | <skill item> | <why> |`, and finally proposed `config.json` changes, each tied to the rows it would fix.
+3. **Check.** Run `scripts/calibration-check.sh <report> <baseline>`. It fails if any baseline item has no row or a value isn't allowed; fix the report until it prints `calibration-check: ok`. It writes the totals (recall over the overlap, misses by cause, noise count) and the sweep stats into the report. Never write those numbers yourself.
+
+Write nothing else.
 
 ## Hard rules
 

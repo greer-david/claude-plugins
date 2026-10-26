@@ -1,5 +1,5 @@
 #!/bin/bash
-# PostToolUse recorder for roundup runs (Microsoft 365 tools): result size, error flag, and the
+# PostToolUse recorder for roundup runs (Microsoft 365 and Atlassian tools, classified like the guard): result size, error flag, and the
 # continuation token the result returned (nextOffset/nextCursor), if any.
 # Also the deterministic noise filter for outlook_email_search and chat_message_search: items whose
 # sender matches m365.noise_senders (unless the subject matches m365.alert_patterns) or whose chat is
@@ -15,10 +15,13 @@ input=$(cat)
 cfg=$("$here/../scripts/config-json" 2>/dev/null) || cfg=null
 out=$(jq -c --argjson cfg "$cfg" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
   (.tool_response) as $r
-  | (.tool_name | ascii_downcase | ltrimstr("mcp__") | split("__") | .[1:] | join("__")) as $name
+  | (.tool_name | ascii_downcase | ltrimstr("mcp__") | split("__")) as $p
+  | ($p[1:] | join("__")) as $name
+  | (if $p[0] | test("microsoft.*365|m365") then "m365" elif $p[0] | test("atlassian|jira|confluence|rovo") then "atlassian" else null end) as $kind
+  | if $kind == null then empty else . end
   # MCP results often carry JSON inside text content; look inside strings that parse as JSON too.
   | ([$r] + [$r | .. | strings | (try fromjson catch empty)]) as $docs
-  | {ts: $ts, phase: "post", tool: .tool_name, key: ("m365:" + $name), agent: .agent_id,
+  | {ts: $ts, phase: "post", tool: .tool_name, key: ($kind + ":" + $name), agent: .agent_id,
      input: .tool_input,
      error: ([$r | .. | objects | (.isError?, .is_error?)] | any(. == true)),
      next: ([$docs[] | .. | objects | (.nextOffset?, .nextCursor?) | select(. != null and . != "")] | first // null)} as $rec
@@ -33,7 +36,7 @@ out=$(jq -c --argjson cfg "$cfg" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
              else null end;
     def who: .chatId? as $c | if why == "muted chat" then $c else (.sender? // .from?.email?) end;
   (if ($r | type) == "array" then $r else ($r.content? // null) end) as $blocks
-  | if ($name | IN("outlook_email_search", "chat_message_search")) | not then {rec: $rec, out: null}
+  | if $kind != "m365" or ($name | IN("outlook_email_search", "chat_message_search") | not) then {rec: $rec, out: null}
     elif $cfg == null then {rec: ($rec + {filter: "no-config"}), out: null}
     elif $rec.error then {rec: ($rec + {filter: "error"}), out: null}
     elif ($blocks | type) != "array"

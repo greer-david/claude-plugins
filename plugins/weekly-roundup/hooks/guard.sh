@@ -50,6 +50,19 @@ decide() {  # decision reason
     || block "$2"
   exit 0
 }
+# Per-run size ceiling: KB of tool results recorded so far (hooks/record.sh), M365 and Atlassian together.
+# Checked before each budgeted read, so a run can overshoot by at most one result. Identity calls are exempt.
+ceiling() {
+  case "$name" in get_me|get_granted_scopes|atlassianuserinfo|getaccessibleatlassianresources) return 0 ;; esac
+  [ -n "$run" ] || return 0
+  local cap kb
+  cap=$(jq -r '.budgets.total_kb' <<<"$cfg") && [[ $cap =~ ^[0-9]+$ ]] || decide deny "no valid budgets.total_kb"
+  [ -f "$state/calls.jsonl" ] || return 0
+  kb=$(jq -s '[.[] | select(.phase == "post") | .bytes // 0] | add // 0 | . / 1024 | floor' "$state/calls.jsonl" 2>/dev/null) \
+    || decide deny "the call record is unreadable, so the size ceiling can't be checked"
+  [ "$kb" -lt "$cap" ] || decide deny "this run has read $kb KB of results (ceiling $cap KB). Work with what you have and note it under Gaps."
+}
+
 take_lock() {  # one lock per run for the call record and approvals; returns non-zero if not taken
   mkdir -p "$state" 2>/dev/null || return 1
   lock="$state/.lock"
@@ -73,6 +86,10 @@ if [ "$kind" = atlassian ]; then
     getconfluencepagefootercomments|getconfluencepageinlinecomments|getconfluencecommentchildren|\
     searchconfluenceusingcql|searchconfluence|getconfluencecontent|\
     getteamworkgraphcontext|getteamworkgraphobject|getgraphcontext|getgraphobject)
+      if [ -n "$run" ]; then
+        cfg=$("$here/../scripts/config-json" 2>/dev/null) || decide deny "can't read a valid weekly-roundup config, so roundup Atlassian reads are blocked"
+        ceiling
+      fi
       record allow "atlassian read" || block "can't write the call record; blocked."
       exit 0 ;;
     *) [ -n "$run" ] || decide ask "Atlassian call $tool isn't on the read list, so it needs your approval" ;;
@@ -168,6 +185,7 @@ if [ -f "$state/calls.jsonl" ]; then
 else
   used=0
 fi
+ceiling
 [ "$used" -lt "$budget" ] || decide deny "$name budget used ($used/$budget calls this run). Work with what you have and note it under Gaps."
 record allow "$((used + 1))/$budget" || block "can't write the call record; blocked."
 exit 0

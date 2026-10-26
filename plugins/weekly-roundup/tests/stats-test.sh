@@ -32,4 +32,12 @@ page f outlook_email_search "$q,\"offset\":0}" '[{"id":1},{"nextOffset":25}]'
 check "earlier call doesn't count" f "outlook_email_search: 1 page never fetched"
 page g outlook_email_search "$q,\"offset\":0}" 'mentions nextOffset in prose'
 check "field name in prose isn't a page" g NONE
+# Atlassian results are recorded under their own key, kept out of the M365 table, and counted in the total.
+rec s "$(jq -nc '{tool_name:"mcp__atlassian__searchJiraIssuesUsingJql", tool_input:{}, tool_response:{content:[{type:"text",text:"x"}]}}')"
+page s outlook_email_search "$q,\"offset\":0}" '[{"id":1}]'
+rec s "$(jq -nc '{tool_name:"mcp__clerk__clerk-resume", tool_input:{}, tool_response:"y"}')"
+out=$(bash scripts/run-stats.sh s)
+grep -q "searchjira\|searchJira" <<<"$out" && { echo "FAIL Atlassian kept out of the M365 table"; echo "$out"; fail=1; } || echo "ok   Atlassian kept out of the M365 table"
+grep -qE "Results read this run: .* KB of 1024 KB ceiling \\(M365 [0-9.]+ KB, Atlassian [0-9.]+ KB\\)" <<<"$out" && [ "$(jq -s '[.[] | select(.key == "atlassian:searchjiraissuesusingjql") | .bytes] | .[0] > 0' "$HOME/.local/state/weekly-roundup/s/calls.jsonl")" = true ] && echo "ok   total KB line with Atlassian" || { echo "FAIL total KB line"; echo "$out"; fail=1; }
+[ "$(grep -c . "$HOME/.local/state/weekly-roundup/s/calls.jsonl")" = 2 ] && echo "ok   unguarded MCP tools aren't recorded" || { echo "FAIL unguarded tool recorded"; fail=1; }
 exit $fail

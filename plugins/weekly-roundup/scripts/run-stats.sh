@@ -12,7 +12,7 @@ echo
 echo "| M365 tool | calls allowed | budget | denied | errors | result KB | budget hit |"
 echo "|---|---|---|---|---|---|---|"
 jq -rs --argjson b "$(jq '.budgets' <<<"$cfg")" '
-  group_by(.tool|sub(".*__";""))[] as $g
+  map(select(.key // "" | startswith("m365:"))) | group_by(.tool|sub(".*__";""))[] as $g
   | ($g[0].tool|sub(".*__";"")) as $t
   | ($b[$t] // $b.default) as $bud
   | ([$g[]|select(.phase=="pre" and .decision=="allow")]|length) as $ok
@@ -20,6 +20,10 @@ jq -rs --argjson b "$(jq '.budgets' <<<"$cfg")" '
   | ([$g[]|select(.phase=="post" and .error==true)]|length) as $er
   | ([$g[]|select(.phase=="post")|.bytes]|add // 0) as $by
   | "| \($t) | \($ok) | \($bud) | \($no) | \($er) | \(($by/1024*10|floor)/10) | \(if $ok>=$bud then "yes" else "no" end) |"' "$f"
+jq -rs --argjson cap "$(jq '.budgets.total_kb' <<<"$cfg")" '
+  [.[] | select(.phase == "post")] as $p
+  | def kb($k): [$p[] | select(.key | startswith($k)) | .bytes // 0] | add // 0 | . / 1024 * 10 | floor / 10;
+  "\nResults read this run: \(kb("")) KB of \($cap) KB ceiling (M365 \(kb("m365:")) KB, Atlassian \(kb("atlassian:")) KB)\(if kb("") >= $cap then ", ceiling hit" else "" end)."' "$f"
 echo
 unread=$(jq -rs '
   # A page is unread when a successful result returned a continuation token and no later

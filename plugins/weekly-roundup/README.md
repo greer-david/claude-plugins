@@ -17,7 +17,7 @@ The plugin adds a safety hook that runs in **all** your Claude Code sessions, no
 - **Every Jira or Confluence write asks you first**, even in auto mode.
 - If the hook can't run (for example, `jq` is missing), it **blocks** Microsoft 365 and Atlassian calls rather than letting them through.
 
-In roundup sessions it also limits how many Microsoft 365 calls each tool can make and keeps searches to the week being swept. It records every call so the log's stats come from code, not from the model, and removes mail and Teams messages that match your noise and mute settings before the model reads them.
+In roundup sessions it also limits how many Microsoft 365 calls each tool can make, caps the total size of Microsoft 365 and Jira results a run reads (`budgets.total_kb`, 1 MB by default), and keeps searches to the span being swept. It records every call so the log's stats come from code, not from the model, and removes mail and Teams messages that match your noise and mute settings before the model reads them.
 
 ## Requirements
 

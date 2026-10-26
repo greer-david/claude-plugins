@@ -19,7 +19,7 @@ jq -e --arg home "$HOME" '
     budgets: {outlook_email_search: 30, read_resource: 40, outlook_calendar_search: 4,
               chat_message_search: 24, teams_list_chats: 2, teams_list_teams: 1,
               teams_list_channels: 5, teams_list_channel_messages: 10, sharepoint_search: 5,
-              search_people: 10, get_me: 2, default: 3},
+              search_people: 10, get_me: 2, default: 3, total_kb: 1024},
     max_window_days: 8, gap_days: 14,
     m365: {include_self_chat: true, noise_senders: [], mute_chats: [], alert_patterns: []}
   }; .)
@@ -36,7 +36,8 @@ jq -e --arg home "$HOME" '
       (if (.week_start_day | IN("sunday","monday","tuesday","wednesday","thursday","friday","saturday")) | not then "week_start_day must be a weekday name" else empty end),
       (if (.max_window_days | int_in(1; 31)) | not then "max_window_days must be a whole number from 1 to 31" else empty end),
       (if (.gap_days | int_in(1; 366)) | not then "gap_days must be a whole number from 1 to 366" else empty end),
-      (.budgets | to_entries[] | select(.value | int_in(0; 1000) | not) | "budgets.\(.key) must be a whole number from 0 to 1000"),
+      (.budgets | del(.total_kb) | to_entries[] | select(.value | int_in(0; 1000) | not) | "budgets.\(.key) must be a whole number from 0 to 1000"),
+      (if (.budgets.total_kb | int_in(1; 100000)) | not then "budgets.total_kb must be a whole number from 1 to 100000" else empty end),
       (.caps | to_entries[] | select(.value | int_in(1; 100000) | not) | "caps.\(.key) must be a whole number from 1 to 100000"),
       (if (.repos | strs) and (.github_repos | strs) and (.skip_projects | strs) then empty else "repos, github_repos and skip_projects must be lists of strings" end),
       (if (.m365.noise_senders | strs) and (.m365.mute_chats | strs) and (.m365.alert_patterns | strs) then empty else "m365 lists must be lists of strings" end),

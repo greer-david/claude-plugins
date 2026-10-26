@@ -13,7 +13,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__.*Microsoft_365__.*",
+        "matcher": "mcp__.*",
         "hooks": [
           {
             "type": "command",

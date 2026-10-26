@@ -82,6 +82,21 @@ mkdir -p "$tmp/ro/.local/state/weekly-roundup"; chmod a-w "$tmp/ro/.local/state/
 expect "unwritable record: M365 blocked"      block "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_CONFIG="$tmp/config.json" WEEKLY_ROUNDUP_RUN=r5
 expect "unwritable record: Jira write blocked" block "{\"tool_name\":\"${A}addCommentToJiraIssue\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_RUN=r5
 
+echo "-- size ceiling (total_kb 2)"
+jq '.budgets.total_kb = 2 | .budgets.default = 50' <<<"$cfgbase" >"$tmp/ceil.json"
+C=(HOME="$tmp/home" WEEKLY_ROUNDUP_CONFIG="$tmp/ceil.json")
+mkdir -p "$st/ce"; wj 2026-10-23T14:00:00Z 2026-10-30T14:00:00Z >"$st/ce/window.json"
+expect "under the ceiling: M365 read"         allow "{\"tool_name\":\"${M}teams_list_chats\"}" "${C[@]}" WEEKLY_ROUNDUP_RUN=ce
+expect "under the ceiling: Atlassian read"    allow "{\"tool_name\":\"${A}getJiraIssue\"}" "${C[@]}" WEEKLY_ROUNDUP_RUN=ce
+printf '{"phase":"post","key":"m365:teams_list_chats","bytes":1500}\n{"phase":"post","key":"atlassian:getjiraissue","bytes":700}\n' >>"$st/ce/calls.jsonl"
+expect "over the ceiling: M365 read"          deny  "{\"tool_name\":\"${M}teams_list_chats\"}" "${C[@]}" WEEKLY_ROUNDUP_RUN=ce
+expect "over the ceiling: Atlassian read"     deny  "{\"tool_name\":\"${A}getJiraIssue\"}" "${C[@]}" WEEKLY_ROUNDUP_RUN=ce
+expect "over the ceiling: get_me exempt"      allow "{\"tool_name\":\"${M}get_me\"}" "${C[@]}" WEEKLY_ROUNDUP_RUN=ce
+expect "Atlassian read outside a run"         allow "{\"tool_name\":\"${A}getJiraIssue\"}" "${H[@]}"
+expect "Atlassian read, bad config in a run"  deny  "{\"tool_name\":\"${A}getJiraIssue\"}" HOME="$tmp/home" WEEKLY_ROUNDUP_CONFIG="$tmp/bad.json" WEEKLY_ROUNDUP_RUN=ce
+jq '.budgets.total_kb = 0' <<<"$cfgbase" >"$tmp/zero.json"
+expect "total_kb 0 is invalid config"         deny  "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/home" WEEKLY_ROUNDUP_CONFIG="$tmp/zero.json" WEEKLY_ROUNDUP_RUN=ce
+
 echo "-- parallel budget (get_me budget 3, 12 at once)"
 for i in $(seq 1 12); do (run_guard "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=par >"$tmp/par.$i"; echo $? >"$tmp/par.$i.rc") & done; wait
 allowed=0; for i in $(seq 1 12); do [ "$(cat "$tmp/par.$i.rc")" = 0 ] && [ ! -s "$tmp/par.$i" ] && allowed=$((allowed+1)); done

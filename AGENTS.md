@@ -37,3 +37,4 @@ alias roundup='env -u ENABLE_CLAUDEAI_MCP_SERVERS WEEKLY_ROUNDUP_RUN=$(date +%Y%
 /plugin marketplace add ~/repos/weekly-roundup
 /plugin install weekly-roundup@weekly-roundup
 ```
+- Bump `version` in both `.claude-plugin/plugin.json` and `marketplace.json` on every change; installed copies only refresh when it changes.

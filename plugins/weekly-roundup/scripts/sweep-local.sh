@@ -72,6 +72,14 @@ nrev=$(grep -c '^#' <<<"$rev")
 rst=ok; [ "$rc" -eq 0 ] || { rst="error: $(head -1 <<<"$rev")"; nrev=0; }
 stats+=("github|reviews|$rst|$nrev|$([ "$nrev" -ge 100 ] && echo yes || echo no)")
 
+# Open review requests still waiting on the user (GitHub's notification emails can't be told apart by subject).
+req=$(gh search prs --review-requested=@me --state open --limit 100 \
+      --json number,title,repository,url,updatedAt --jq '.[] | "#\(.number) \(.repository.nameWithOwner) \(.title) \(.url) (updated \(.updatedAt[0:10]))"' 2>&1); rc=$?
+nreq=$(grep -c '^#' <<<"$req")
+[ "$nreq" -gt 0 ] && { echo "### review requested, not done (possibly missed)"; echo "$req"; }
+qst=ok; [ "$rc" -eq 0 ] || { qst="error: $(head -1 <<<"$req")"; nreq=0; }
+stats+=("github|review requests|$qst|$nreq|$([ "$nreq" -ge 100 ] && echo yes || echo no)")
+
 echo "## SESSIONS"
 clerk=$(c '.clerk_dir // empty'); tdir=$(c '.transcripts_dir'); skips=$(c '.skip_projects // [] | join("|")')
 # clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript

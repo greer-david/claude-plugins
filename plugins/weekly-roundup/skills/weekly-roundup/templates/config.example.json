@@ -21,6 +21,6 @@
     "include_self_chat": true,
     "noise_senders": ["noreply", "no-reply", "donotreply", "notifications", "mailer-daemon", "atlassian.net", "github.com"],
     "mute_chats": [],
-    "alert_patterns": ["refresh failed", "has requested access", "requested your review"]
+    "alert_patterns": ["refresh failed", "has requested access"]
   }
 }

@@ -18,6 +18,7 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `tests/guard-test.sh`: guard self-test (classification, fail-closed, dates, parallel budgets)
 - `tests/stats-test.sh`: recorder (errors, classification) + unread-page and omitted-day detection self-test
 - `tests/filter-test.sh`: noise filter + Dropped table self-test
+- `tests/sweep-test.sh`: sweep-local GitHub sections with a stubbed `gh`
 - `tests/window-test.sh`: start-run window rules + check-log self-test
 - `tests/approval-test.sh`: approve.sh + guard approval binding self-test
 

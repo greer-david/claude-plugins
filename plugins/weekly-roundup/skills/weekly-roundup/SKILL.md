@@ -77,14 +77,22 @@ After the M365 subagents return, run `scripts/run-stats.sh`. If it lists **unrea
 
 **Sweep stats** are copied from code output, never written by you: paste the local `## STATS` block, then the output of `scripts/run-stats.sh` (M365 calls, budgets, KB read, denials from the hook record), including its Dropped table, then the M365 subagents' Judgement drops, labelled as self-reported.
 
-Jira proposals: number the rows continuously. Each row has the ticket, the action (comment / status / new ticket / link-merge), the exact text in a quote block, the sources, and a confidence (high/med/low). Put them in three groups: **Review closely**, **Quick skim**, **Not posting (why)**. Status changes, new tickets and merges always go in a separate **Needs explicit approval** list, never in a group.
+Jira proposals: number them continuously. Each proposal heading must use one of these exact forms, because `hooks/approve.sh` reads them to bind approvals (anything else can't be approved), followed by the sources and a confidence (high/med/low):
+
+- `**N. KEY-123 · comment**`, then the exact comment text as a quote block (`> ` lines), posted as Markdown
+- `**N. KEY-123 · status → Done (transition 31)**`: the transition ID from `getTransitionsForJiraIssue`
+- `**N. KEY-123 · link Blocks → KEY-456**`: the first key is the inward issue, the second the outward
+- `**N. KEY · new Task**`: then a quote block whose first line is the summary and the rest the description
+
+The quote is exactly what gets posted. Don't put anything in a post that the proposal doesn't show (no extra fields, assignees, visibility or link comments): the guard denies it. Put them in three groups: **Review closely**, **Quick skim**, **Not posting (why)**. Status changes, new tickets and merges always go in a separate **Needs explicit approval** list, never in a group.
 
 ## 6. Review and approval
 
 Show the user the path and the leadership summary, then ask for approvals in the form `post 1-6, 9`.
 
-- Post only the rows named. Status, new-ticket and merge rows also need their own explicit "yes" each.
-- If the user edits a row's text, post the edited text.
+- Post only the proposals named, with exactly the text the log shows. In a roundup run the guard enforces this: each `post` message (exactly `post <numbers>`, nothing else) approves one write per named proposal, and any write that doesn't match one is denied. Status changes, new tickets and links must be named singly (`post 12`); a range skips them. Each approved write still shows the user a permission prompt.
+- If the user edits a proposal's text, they approve it again with `post N` after the edit; the earlier approval no longer counts.
+- If a post fails or is denied, report it. Don't retry with different text; ask the user to approve again.
 - After posting, mark each row in the log `✅ posted <date>` or `⏭ skipped`, and update `jira_posted`.
 - With `--dry-run`, write the log and stop before approval.
 

@@ -53,11 +53,11 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
-5. **Check the hook works:** run each script in `tests/` (`guard-test.sh`, `stats-test.sh`, `filter-test.sh`, `window-test.sh`) from the installed plugin folder. Every line should say `ok`.
+5. **Check the hook works:** run each script in `tests/` (`guard-test.sh`, `stats-test.sh`, `filter-test.sh`, `window-test.sh`, `approval-test.sh`) from the installed plugin folder. Every line should say `ok`.
 
 ## Weekly use
 
-- **Friday morning:** open a new terminal tab in your notes folder and type `roundup`. Review the log, then approve rows (`post 1-6, 9`). Status changes and new tickets each need their own yes.
+- **Friday morning:** open a new terminal tab in your notes folder and type `roundup`. Review the log, then approve proposals with a message that is just `post 1-6, 9`. Status changes, new tickets and links must be named one by one (`post 12`). Only what you approved, with exactly the text in the log, can be posted, and Claude Code still asks before each post. If you edit a proposal, approve it again.
 - **A different week:** run `roundup-session`, then `/weekly-roundup 2026-10-18`.
 - **What each run covers:** from where your last log left off until now, so nothing is swept twice or skipped. Anything that happened before this week (say, Friday afternoon after last week's run) goes in this week's log, marked late. If your last run was over two weeks ago, the run starts at this week's start and tells you what it didn't cover; `/weekly-roundup --since 2026-10-01` covers more.
 - **Dry run:** `/weekly-roundup --dry-run` writes the log and stops before approval.

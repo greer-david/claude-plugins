@@ -43,4 +43,4 @@ A numbered row in the log proposing one Jira write (a comment, a status change, 
 _Avoid_: Row, suggestion
 
 **Approval**:
-The user's go-ahead for specific proposals: a `post 1-6, 9` message, plus an explicit "yes" for each status change, new ticket or link. The permission prompt on each Jira write is the final, human-only check.
+The user's go-ahead for specific proposals: a message that is exactly `post <numbers>` (e.g. `post 1-6, 9`), allowing one write per proposal. Status changes, new tickets and links must be named singly. The permission prompt on each Jira write is the final, human-only check.

@@ -1,10 +1,36 @@
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": "mcp__.*", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/guard.sh" } ] }
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/guard.sh"
+          }
+        ]
+      }
     ],
     "PostToolUse": [
-      { "matcher": "mcp__.*Microsoft_365__.*", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/record.sh" } ] }
+      {
+        "matcher": "mcp__.*Microsoft_365__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/record.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/approve.sh"
+          }
+        ]
+      }
     ]
   }
 }

@@ -46,7 +46,10 @@ jira_posted: 0
 ### Not posting
 
 ### Needs explicit approval
-<!-- status changes, new tickets, merges -->
+<!-- status changes, new tickets, links; each approved singly (post N). Heading forms:
+**N. KEY-### · status → Done (transition 31)**
+**N. KEY-### · link Blocks → KEY-###**
+**N. KEY · new Task**  then > summary line, > description lines -->
 
 ## Unverified / gaps
 

@@ -50,6 +50,18 @@ decide() {  # decision reason
     || block "$2"
   exit 0
 }
+take_lock() {  # one lock per run for the call record and approvals; returns non-zero if not taken
+  mkdir -p "$state" 2>/dev/null || return 1
+  lock="$state/.lock"
+  for _ in $(seq 1 100); do
+    if mkdir "$lock" 2>/dev/null; then echo $$ >"$lock/pid"; trap 'rm -rf "$lock"' EXIT; return 0; fi
+    # Recover a lock left by a hook that was killed.
+    holder=$(cat "$lock/pid" 2>/dev/null)
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$lock"; continue; fi
+    sleep 0.05
+  done
+  return 1
+}
 
 if [ "$kind" = atlassian ]; then
   case "$name" in
@@ -63,8 +75,52 @@ if [ "$kind" = atlassian ]; then
     getteamworkgraphcontext|getteamworkgraphobject|getgraphcontext|getgraphobject)
       record allow "atlassian read" || block "can't write the call record; blocked."
       exit 0 ;;
-    *) decide ask "Atlassian call $tool isn't on the read list, so it needs your approval" ;;
+    *) [ -n "$run" ] || decide ask "Atlassian call $tool isn't on the read list, so it needs your approval" ;;
   esac
+  # In a run, a write must match an unused approval from hooks/approve.sh exactly (one write each),
+  # and then still asks: the permission prompt is the human approval (docs/adr/0002).
+  take_lock || block "couldn't lock the approvals; blocked."
+  [ -f "$state/approvals.jsonl" ] || decide deny "no proposals are approved in this run (approve with: post <numbers>)"
+  hit=$(jq -r --arg n "$name" --slurpfile apps "$state/approvals.jsonl" '
+    def norm: gsub("\r"; "") | split("\n") | map(sub("[[:space:]]+$"; "")) | join("\n") | sub("^\\s+"; "") | sub("\\s+$"; "");
+    def has($k): .[$k] != null;
+    def md: (.contentFormat // "markdown") == "markdown";
+    .tool_input as $t
+    | (if $n == "addcommenttojiraissue" then
+         if ($t | has("commentId") or has("commentVisibility") or (md | not)) then "extra"
+         else {action: "comment", key: ($t.issueIdOrKey | ascii_upcase), body: ($t.commentBody | norm)} end
+       elif $n == "transitionjiraissue" then
+         if ($t | has("fields") or has("update") or has("historyMetadata")) then "extra"
+         else {action: "status", key: ($t.issueIdOrKey | ascii_upcase), transition: ($t.transition.id | tostring)} end
+       elif $n == "createjiraissue" then
+         if ($t | has("additional_fields") or has("assignee_account_id") or has("parent") or has("transition") or (md | not))
+            or (($t.description // "") | type) != "string" then "extra"
+         else {action: "new", project: ($t.projectKey | ascii_upcase), type: ($t.issueTypeName | ascii_downcase),
+               summary: ($t.summary | norm), description: ($t.description // "" | norm)} end
+       elif $n == "createissuelink" then
+         if ($t | has("comment")) then "extra"
+         else {action: "link", inward: ($t.inwardIssue | ascii_upcase), outward: ($t.outwardIssue | ascii_upcase),
+               type: ($t.type | ascii_downcase)} end
+       else "unbound" end) as $want
+    | if $want == "extra" then "extra"
+      elif $want == "unbound" then "unbound"
+      else ([$apps | to_entries[] | select(.value.used | not)
+             | select(.value | if .action == "comment" then {action, key: (.key | ascii_upcase), body}
+                               elif .action == "status" then {action, key: (.key | ascii_upcase), transition}
+                               elif .action == "new" then {action, project: (.project | ascii_upcase), type: (.type | ascii_downcase), summary, description}
+                               else {action, inward: (.inward | ascii_upcase), outward: (.outward | ascii_upcase), type: (.type | ascii_downcase)} end
+                         | . == $want)
+             | .key] | first // "nomatch") end
+  ' <<<"$input" 2>/dev/null) || decide deny "couldn't check $tool against the approvals; denied."
+  case "$hit" in
+    unbound) decide deny "$tool can't be approved in a roundup run (only comments, status changes, new tickets and links from the log)" ;;
+    extra)   decide deny "$tool sets options a proposal doesn't show (comment updates or visibility, extra fields, ADF, a link comment); denied" ;;
+    nomatch) decide deny "$tool doesn't match any unused approved proposal exactly. Post the proposal's text as it is in the log, or have the user approve it again with: post <number>" ;;
+  esac
+  n=$(jq -rs --argjson i "$hit" '.[$i].n' "$state/approvals.jsonl" 2>/dev/null)
+  jq -cs --argjson i "$hit" '.[$i].used = true | .[]' "$state/approvals.jsonl" >"$state/approvals.tmp" \
+    && mv "$state/approvals.tmp" "$state/approvals.jsonl" || block "couldn't mark the approval used; blocked."
+  decide ask "matches approved proposal $n; confirm to post it"
 fi
 
 # Microsoft 365
@@ -105,17 +161,7 @@ esac
 # Per-run budget, keyed on kind:tool. A mkdir lock makes count-and-record atomic across parallel hooks.
 budget=$(jq -r --arg t "$name" '.budgets[$t] // .budgets.default' <<<"$cfg")
 [[ $budget =~ ^[0-9]+$ ]] || decide deny "no valid budget for $name"
-mkdir -p "$state" 2>/dev/null || block "can't create $state; blocked."
-lock="$state/.lock"; got=
-for _ in $(seq 1 100); do
-  if mkdir "$lock" 2>/dev/null; then echo $$ >"$lock/pid"; got=1; break; fi
-  # Recover a lock left by a hook that was killed.
-  holder=$(cat "$lock/pid" 2>/dev/null)
-  if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$lock"; continue; fi
-  sleep 0.05
-done
-[ -n "$got" ] || block "couldn't lock the call record; blocked."
-trap 'rm -rf "$lock"' EXIT
+take_lock || block "couldn't lock the call record; blocked."
 if [ -f "$state/calls.jsonl" ]; then
   used=$(jq -s --arg k "$key" '[.[] | select(.phase == "pre" and .key == $k and .decision == "allow")] | length' "$state/calls.jsonl" 2>/dev/null) \
     || decide deny "the call record is unreadable, so the budget can't be checked"

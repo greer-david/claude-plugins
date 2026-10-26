@@ -1,0 +1,17 @@
+# Copy to ~/.config/weekly-roundup/config.yaml and edit.
+log_dir: ~/notes/Work/Weekly
+rules_file: ~/notes/Meta/roundup/rules.md
+# log_template: ~/notes/_Templates/week.md
+week_start_day: sunday
+repos:
+  - ~/repos/your-main-repo
+github_repos:
+  - your-org/your-main-repo
+clerk_dir: ""            # clerk output.dir, if you use clerk
+transcripts_glob: ~/.claude/projects/*/*.jsonl
+skip_projects: []
+jira:
+  site: your-site.atlassian.net
+  project: PBI
+  user: Your Name
+reviewers: [Jacob, Hunter]

@@ -38,6 +38,8 @@ unread=$(jq -rs '
 [ -n "$unread" ] && { echo "Unread pages (results said more exist; never fetched):"; echo "$unread"; echo; }
 # Omitted days: the skill's fixed plan searches email and chat once per local day of the window.
 # A day (clipped to the window) counts only if successful searches together cover all of it.
+# Only the plan's broad searches count (query "*" or none, no folderName); a time without a zone
+# is UTC, as in the guard.
 win="$base/$run/window.json"
 if [ -f "$win" ]; then
   omitted=$(jq -rs --slurpfile w "$win" --arg off "$(date +%z)" '
@@ -45,7 +47,7 @@ if [ -f "$win" ]; then
     | def inst: (capture("^(?<b>[0-9]{4}-[0-9]{2}-[0-9]{2})(?<t>T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?([.][0-9]+)?(?<z>Z|[+-][0-9]{2}:[0-9]{2})?$") // null)
         | if . == null then null
           else ((.b + ((.t // "T00:00:00") | if length == 6 then . + ":00" else . end)) | strptime("%Y-%m-%dT%H:%M:%S") | mktime)
-               - (if .z == null then $offs elif .z == "Z" then 0
+               - (if .z == null then  0 elif .z == "Z" then 0
                   else (.z[0:1] + "1" | tonumber) * ((.z[1:3] | tonumber) * 3600 + (.z[4:6] | tonumber) * 60) end) end;
       def day: . + $offs | strftime("%Y-%m-%d");
       def midnight: strptime("%Y-%m-%d") | mktime - $offs;
@@ -54,7 +56,7 @@ if [ -f "$win" ]; then
        | select(.s < .e)] as $days
     | [.[] | select(.phase == "post" and (.error | not))] as $p
     | ["outlook_email_search", "chat_message_search"][] as $t
-    | ([$p[] | select(.key == "m365:" + $t) | [(.input.afterDateTime // "" | tostring | inst), (.input.beforeDateTime // "" | tostring | inst)]
+    | ([$p[] | select(.key == "m365:" + $t and (.input.query // "*") == "*" and .input.folderName == null) | [(.input.afterDateTime // "" | tostring | inst), (.input.beforeDateTime // "" | tostring | inst)]
         | select(.[0] != null and .[1] != null)] | sort) as $iv
     | [$days[] | . as $d | (reduce $iv[] as $i ($d.s; if $i[0] <= . and $i[1] > . then $i[1] else . end)) as $reach
        | select($reach < $d.e) | $d.d] as $miss

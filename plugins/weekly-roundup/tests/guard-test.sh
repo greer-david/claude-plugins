@@ -64,12 +64,13 @@ expect "search before the window"             deny  "$(search 2026-10-20 2026-10
 expect "search after the window"              deny  "$(search 2026-11-02 2026-11-03)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
 printf 'garbage\n' >"$st/w1/window.json"
 expect "corrupt window denies"                deny  "$(search 2026-10-26 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+wj 2026-10-23T14:00:00Z 2026-10-30T14:00:00Z >"$st/w1/window.json"
 expect "search without dates"                 deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"query\":\"*\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "natural-language dates"               deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"last week\",\"beforeDateTime\":\"today\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "malformed date suffix"                deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-18junk\",\"beforeDateTime\":\"2026-10-20\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "8 days 23 hours (max 8)"              deny  "{\"tool_name\":\"${M}outlook_email_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-10T00:00:00Z\",\"beforeDateTime\":\"2026-10-18T23:00:00Z\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
 expect "offset times, 1 day"                  allow "{\"tool_name\":\"${M}chat_message_search\",\"tool_input\":{\"afterDateTime\":\"2026-10-18T00:00:00-05:00\",\"beforeDateTime\":\"2026-10-19T00:00:00-05:00\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r1
-expect "Feb 30 is not a date"                  deny  "$(search 2026-02-30 2026-03-01)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
+expect "Oct 32 is not a date"                 deny  "$(search 2026-10-26 2026-10-32)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
 expect "hour 99 is not a time"                deny  "$(search 2026-10-26T99:00:00Z 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
 expect "minute 60 is not a time"              deny  "$(search 2026-10-26T10:60Z 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
 expect "offset +99:99 is not an offset"       deny  "$(search 2026-10-26T10:00:00+99:99 2026-10-27)" "${R[@]}" WEEKLY_ROUNDUP_RUN=w1
@@ -128,6 +129,10 @@ ln -s "pid.$live.1" "$lk"
 expect "live lock is never taken"             block "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
 [ "$(readlink "$lk")" = "pid.$live.1" ] && echo "ok   live lock left in place" || { echo "FAIL live lock removed"; fail=1; }
 kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$lk"
+# A hook killed while reclaiming leaves a reclaim lock naming a dead process: it is recovered too.
+ln -s "pid.$(dead).1" "$lk"; ln -s "pid.$(dead)" "$st/lk/.run.lock.reclaim"
+expect "dead reclaim lock is recovered"       allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
+[ ! -L "$st/lk/.run.lock.reclaim" ] && echo "ok   dead reclaim lock removed" || { echo "FAIL reclaim lock left"; fail=1; }
 # A dead holder's lock and 12 hooks racing to reclaim it: the budget still holds, so no hook removed a live lock.
 ln -s "pid.$(dead).1" "$st/par2/.run.lock" 2>/dev/null || { mkdir -p "$st/par2"; ln -s "pid.$(dead).1" "$st/par2/.run.lock"; }
 for i in $(seq 1 12); do (run_guard "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=par2 >"$tmp/p2.$i"; echo $? >"$tmp/p2.$i.rc") & done; wait

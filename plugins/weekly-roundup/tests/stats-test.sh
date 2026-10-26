@@ -71,4 +71,20 @@ grep -qx -- "- chat_message_search: 2026-10-25, 2026-10-27, 2026-10-28" <<<"$out
 page od2 outlook_email_search "$(dq 2026-10-25 2026-10-29)" '[{"id":1}]'; page od2 chat_message_search "$(dq 2026-10-24 2026-10-29)" '[{"id":1}]'
 cp "$HOME/.local/state/weekly-roundup/od/window.json" "$HOME/.local/state/weekly-roundup/od2/"
 TZ=UTC bash scripts/run-stats.sh od2 | grep -q "Omitted days" && { echo "FAIL fully covered window"; fail=1; } || echo "ok   fully covered window: no omitted days"
+# Only the plan's broad searches (query "*" or none, no folderName) count as covering a day.
+for r in od3 od4; do mkdir -p "$HOME/.local/state/weekly-roundup/$r"; cp "$HOME/.local/state/weekly-roundup/od/window.json" "$HOME/.local/state/weekly-roundup/$r/"; done
+page od3 outlook_email_search '{"afterDateTime":"2026-10-25","beforeDateTime":"2026-10-29","query":"subject:foo"}' '[{"id":1}]'
+page od3 chat_message_search '{"afterDateTime":"2026-10-25","beforeDateTime":"2026-10-29","query":"*","folderName":"Inbox"}' '[{"id":1}]'
+out=$(TZ=UTC bash scripts/run-stats.sh od3)
+grep -q -- "- outlook_email_search: 2026-10-25" <<<"$out" && grep -q -- "- chat_message_search: 2026-10-25" <<<"$out" \
+  && echo "ok   restricted searches don't cover days" || { echo "FAIL restricted searches credited"; echo "$out"; fail=1; }
+# A time without a zone is UTC, as in the guard, whatever the local zone.
+page od4 outlook_email_search '{"afterDateTime":"2026-10-25T00:00:00","beforeDateTime":"2026-10-29T00:00:00","query":"*"}' '[{"id":1}]'
+page od4 chat_message_search '{"afterDateTime":"2026-10-25T00:00:00","beforeDateTime":"2026-10-29T00:00:00"}' '[{"id":1}]'
+TZ=America/Chicago bash scripts/run-stats.sh od4 | grep -q "Omitted days" && { echo "FAIL zone-less time read as local"; TZ=America/Chicago bash scripts/run-stats.sh od4; fail=1; } || echo "ok   zone-less time is UTC"
+# Error text inside a structured result's fields is data, not an error.
+rec se "$(jq -nc --arg t "${M}outlook_email_search" '{tool_name:$t, tool_input:{}, tool_response:{items:[{subject:"500 error on prod"}]}}')"
+[ "$(jq -s '.[-1].error' "$HOME/.local/state/weekly-roundup/se/calls.jsonl")" = false ] && echo "ok   error words in a structured field aren't an error" || { echo "FAIL structured field read as error"; tail -1 "$HOME/.local/state/weekly-roundup/se/calls.jsonl"; fail=1; }
+page se outlook_email_search '{}' 'HTTP 503 Service Unavailable'
+[ "$(jq -s '.[-1].error' "$HOME/.local/state/weekly-roundup/se/calls.jsonl")" = true ] && echo "ok   HTTP error text still an error" || { echo "FAIL HTTP text error lost"; fail=1; }
 exit $fail

@@ -43,6 +43,8 @@ lock_dead() {  # holder -> true if no live process holds it (a malformed holder 
 }
 reclaim_lock() {  # dead holder -> removes the lock if it still names that holder
   local r="$state/.run.lock.reclaim"
+  # A reclaimer killed mid-way leaves its reclaim lock; clear it if its holder is dead and unchanged.
+  local rh; rh=$(readlink "$r" 2>/dev/null) && lock_dead "$rh" && [ "$(readlink "$r" 2>/dev/null)" = "$rh" ] && rm -f "$r"
   ln -s "pid.$$" "$r" 2>/dev/null || return 1
   [ "$(readlink "$lock" 2>/dev/null)" = "$1" ] && rm -f "$lock"
   rm -f "$r"

@@ -24,10 +24,12 @@ out=$(jq -c --arg kind "$kind" --arg name "$name" --argjson cfg "$cfg" --arg ts 
   | {ts: $ts, phase: "post", tool: .tool_name, key: ($kind + ":" + $name), agent: .agent_id,
      input: .tool_input,
      # An error: an isError flag anywhere (also in JSON inside text), an "error" member of the result
-     # or of a text block that is JSON, or a short text block that is not JSON and reads like an HTTP error.
+     # or of a text block that is JSON, or a short text block that is not JSON and reads like an HTTP error
+     # (only unstructured text: words in a structured field like a subject are data).
      error: (([$docs[] | .. | objects | (.isError?, .is_error?)] | any(. == true))
             or any($docs[] | objects | .error? // null; . != null and . != false and . != "")
-            or any($r | .. | strings | select(length < 500 and (try fromjson catch null) == null);
+            or any($r | if type == "string" then . else ((if type == "array" then .[] else .content[]? end) | objects | select(.type == "text") | .text | strings) end
+                   | select(length < 500 and (try fromjson catch null) == null);
                    test("^\\s*(error\\b|http/?[0-9.]* [45][0-9]{2}\\b|[45][0-9]{2}\\b)"; "i")
                    or test("\\b(401|403|404|408|429|5[0-9]{2})\\b.{0,40}(forbidden|unauthorized|not found|timeout|too many requests|error|unavailable)"; "i"))),
      next: ([$docs[] | .. | objects | (.nextOffset?, .nextCursor?) | select(. != null and . != "")] | first // null)} as $rec

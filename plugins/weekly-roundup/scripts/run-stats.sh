@@ -22,10 +22,15 @@ jq -rs --argjson b "$(jq '.budgets' <<<"$cfg")" '
   | "| \($t) | \($ok) | \($bud) | \($no) | \($er) | \(($by/1024*10|floor)/10) | \(if $ok>=$bud then "yes" else "no" end) |"' "$f"
 echo
 unread=$(jq -rs '
-  [.[]|select(.phase=="post")] as $p
-  | [ $p[] | select(.more) | {t:.tool, k:(.input|del(.offset,.cursor,.limit)|tostring), o:(.input.offset // 0)} ] as $m
-  | [ $m[] | . as $x | select([ $p[] | select(.tool==$x.t and (.input|del(.offset,.cursor,.limit)|tostring)==$x.k and ((.input.offset // 0) > $x.o or .input.cursor)) ] | length == 0) ]
-  | group_by(.t)[] | "- \(.[0].t|sub(".*__";"")): \(length) quer\(if length==1 then "y" else "ies" end) left with unread pages"' "$f")
+  # A page is unread when a successful result returned a continuation token and no later
+  # successful call with the same query fetched exactly that token (as offset or cursor).
+  def q: (.input // {}) | del(.offset, .cursor, .limit) | tostring;
+  [.[] | select(.phase == "post")] as $p
+  | [ range(0; $p | length) as $i | $p[$i] | select(.next != null and (.error | not))
+      | select(any($p[$i+1:][]; .tool == $p[$i].tool and (q == ($p[$i] | q)) and (.error | not)
+                   and ((.input.offset // null) == $p[$i].next or (.input.cursor // null) == $p[$i].next)) | not)
+      | .tool ]
+  | group_by(.)[] | "- \(.[0] | sub(".*__"; "")): \(length) page\(if length == 1 then "" else "s" end) never fetched"' "$f")
 [ -n "$unread" ] && { echo "Unread pages (results said more exist; never fetched):"; echo "$unread"; echo; }
 deny=$(jq -r 'select(.decision=="deny") | "- \(.tool|sub(".*__";"")): \(.reason)"' "$f" | sort | uniq -c)
 [ -n "$deny" ] && { echo "Denied calls:"; echo "$deny"; }

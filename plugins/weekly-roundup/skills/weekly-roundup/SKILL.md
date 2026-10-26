@@ -18,12 +18,12 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 - `log_template`: optional override for `templates/week.md`
 - `repos`: local repo paths; `github_repos`: `owner/name` for `gh`; `github_user`: the `gh` account to read with (its token is used without switching the active account)
 - `clerk_dir`: clerk `output.dir` (optional)
-- `transcripts_glob`: default `~/.claude/projects/*/*.jsonl`
+- `transcripts_dir`: default `~/.claude/projects`
 - `skip_projects`: transcript or clerk slugs to ignore (substring match)
 - `jira`: `site`, `project`, `user` (display name)
 - `week_start_day`: `sunday` by default
 - `reviewers`: the names used in wording rules
-- `caps`: `findings_per_source` (40), `transcript_kb` (20), `clerk_kb` (60), `commits_per_repo` (100). Enforced by `scripts/sweep-local.sh`.
+- `caps`: `transcript_kb` (96), `clerk_kb` (60), `commits_per_repo` (100), enforced by `scripts/sweep-local.sh`; `findings_per_source` (40), a limit for the sweep subagents. `scripts/config-json` rejects invalid values.
 - `budgets`: maximum calls per M365 tool per run (e.g. `outlook_email_search: 12`, `read_resource: 40`, `default: 3`); `max_window_days` (8). Enforced by `hooks/guard.sh`.
 - `m365`: `include_self_chat` (true), `noise_senders` (substrings or domains to drop), `mute_chats` (chat or channel names to skip), `alert_patterns` (subject substrings of automated mail to surface instead of drop)
 
@@ -41,13 +41,13 @@ Read `team_rules_file` (if set), then `rules_file`, completely. Every proposal b
 
 ## 3. Sweep sources
 
-Each source is swept by its own subagent on **Haiku** (`model: haiku`), all in parallel. Raw data stays inside the subagent. Each one returns at most `caps.findings_per_source` findings, one line each:
+Each source is swept by its own subagent on **Haiku** (`model: haiku`), all in parallel. Raw data stays inside the subagent. Each one returns at most `caps.findings_per_source` findings (a summarizing limit the subagent follows, not one enforced in code), one line each:
 
 `date | source | repo/project | refs (PR #, PBI-###, person) | one-line outcome | done / in progress / open`
 
 If this week's log already exists, sweep only activity after its `run_at`.
 
-1. **Local (git, GitHub, sessions)**: one subagent runs `scripts/sweep-local.sh <start> <end>` and turns its output into findings. The script is the only way to read these sources. Don't run your own `git log`, `gh` or transcript reads. It dedupes commits across worktrees, uses clerk summaries and falls back to transcripts (user turns plus final reply), and applies every cap in code. Return its `## STATS` block verbatim along with the findings.
+1. **Local (git, GitHub, sessions)**: one subagent runs `scripts/sweep-local.sh <start> <end>` and turns its output into findings. The script is the only way to read these sources. Don't run your own `git log`, `gh` or transcript reads. It dedupes commits across worktrees, uses clerk summaries and falls back to transcripts (user turns plus final reply), and applies the size caps (`transcript_kb`, `clerk_kb`, `commits_per_repo`) in code. Return its `## STATS` block verbatim along with the findings.
 2. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner, and nothing else.
 3. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`, read tools only). If the tools aren't loaded, the session was started without connectors. Tell the user to restart with the `roundup` alias (see the plugin README), or carry on and list M365 under Gaps. In a roundup run the guard hook enforces call budgets, and every search must pass ISO `afterDateTime`/`beforeDateTime` covering the window (max `max_window_days`). Plan calls to fit the budget: `limit: 25`, paging with `offset`. When a call is denied for budget, stop that source and note it under Gaps. Each M365 subagent also returns a **Dropped** list: sender or chat, count and reason (e.g. `noreply@x.com · 14 · automated`). Split it across three subagents:
    - **Email** (`outlook_email_search`, window only): everything the user sent, and everything received from real people or real groups/distribution lists. Drop automated mail: senders matching `m365.noise_senders`, no-reply addresses, notifications, newsletters, calendar notices, delivery reports. Search **all folders**: never set `folderName`, because mail filed to other folders is otherwise missed. **Fixed plan:** one query per day in the window (`afterDateTime` = that day, `beforeDateTime` = the next day, `query: "*"`, `limit: 25`), paged with `offset` until the response has no `nextOffset`. Don't stop early and don't summarize until every day is paged. Work from search previews; use `read_resource` only for threads that look like work done or a possibly-missed ask. Automated mail matching `m365.alert_patterns` (e.g. refresh failures) is not dropped; it goes under possibly missed. A possibly-missed ask needs the user in **To** or addressed by name. Asks where the user is only cc'd or that are addressed to a team or distribution list count as context, not possibly missed. Return two kinds of findings: **work done** (what the user delivered, decided or answered) and **possibly missed** (asks, questions or commitments addressed to the user with no reply from them in the thread).

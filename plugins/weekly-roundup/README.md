@@ -40,7 +40,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `/weekly-roundup` will offer to do this on first run.
 
 3. **Rules.**
-   - **Team rules** live in your team repo (for example `your-team-repo/docs/weekly-roundup/team-rules.md`). Point `team_rules_file` at your local clone.
+   - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`, started from `templates/team-rules.md`) and change by PR. Point `team_rules_file` at your local clone.
    - **Personal rules:** copy `templates/rules.md` to wherever `rules_file` points. It starts empty and grows from your corrections.
 
 4. **Microsoft 365 only in roundup sessions (recommended).** Keep claude.ai connectors out of your everyday sessions and turn them on just for roundups. Add to `~/.zshrc` (or `~/.bashrc`):
@@ -53,7 +53,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
-5. **Check the hook works:** run `tests/guard-test.sh` from the installed plugin folder. Every line should say `ok`.
+5. **Check the hook works:** run `tests/guard-test.sh` and `tests/stats-test.sh` from the installed plugin folder. Every line should say `ok`.
 
 ## Weekly use
 

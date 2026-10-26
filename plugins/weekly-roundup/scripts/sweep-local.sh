@@ -7,16 +7,17 @@ set -u
 addday() { jq -rn --arg d "$1" --argjson n "${2:-1}" '$d|strptime("%Y-%m-%d")|mktime + 86400*$n|strftime("%Y-%m-%d")'; }
 start=$1; end=$2
 here=$(cd "$(dirname "$0")" && pwd)
-cfg=$("$here/config-json")
+cfg=$("$here/config-json") || { echo "sweep-local: config failed to load; nothing swept." >&2; exit 1; }
 c() { jq -r "$1" <<<"$cfg"; }
 cap_commits=$(c '.caps.commits_per_repo'); cap_tkb=$(c '.caps.transcript_kb'); cap_ckb=$(c '.caps.clerk_kb')
 gh_user=$(c '.github_user // empty')
 if [ -n "$gh_user" ]; then GH_TOKEN=$(gh auth token --user "$gh_user" 2>/dev/null); export GH_TOKEN; fi
 end_next=$(addday "$end")
 stats=()
+tmp=$(mktemp -d) || exit 1
 
 echo "## GIT"
-seen=$(mktemp); trap 'rm -f "$seen"' EXIT
+seen="$tmp/seen"; : >"$seen"; trap 'rm -rf "$tmp"' EXIT
 while IFS= read -r repo; do
   git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || { stats+=("git|$(basename "$repo")|missing|0|-"); continue; }
   email=$(git -C "$repo" config user.email)
@@ -32,20 +33,21 @@ echo "## GITHUB"
 while IFS= read -r gr; do
   out=$(gh pr list -R "$gr" --author @me --state all --search "updated:$start..$end" --limit 100 \
         --json number,title,state,mergedAt,url,headRefName \
-        --jq '.[] | "#\(.number) [\(.state)\(if .mergedAt then " "+.mergedAt[0:10] else "" end)] \(.title) \(.url)"' 2>&1)
+        --jq '.[] | "#\(.number) [\(.state)\(if .mergedAt then " "+.mergedAt[0:10] else "" end)] \(.title) \(.url)"' 2>&1); rc=$?
   n=$(grep -c '^#' <<<"$out")
   [ "$n" -gt 0 ] && { echo "### $gr (authored)"; echo "$out"; }
-  st=ok; [ "$n" -eq 0 ] && grep -q . <<<"$out" && st="error: $(head -1 <<<"$out")"
+  st=ok; [ "$rc" -eq 0 ] || { st="error: $(head -1 <<<"$out")"; n=0; }
   stats+=("github|$gr|$st|$n|$([ "$n" -ge 100 ] && echo yes || echo no)")
 done < <(c '.github_repos[]?')
 rev=$(gh search prs --reviewed-by @me --updated "$start..$end" --limit 100 \
-      --json number,title,repository,url --jq '.[] | "#\(.number) \(.repository.nameWithOwner) \(.title) \(.url)"' 2>&1)
+      --json number,title,repository,url --jq '.[] | "#\(.number) \(.repository.nameWithOwner) \(.title) \(.url)"' 2>&1); rc=$?
 nrev=$(grep -c '^#' <<<"$rev")
 [ "$nrev" -gt 0 ] && { echo "### reviewed by me"; echo "$rev"; }
-stats+=("github|reviews|ok|$nrev|$([ "$nrev" -ge 100 ] && echo yes || echo no)")
+rst=ok; [ "$rc" -eq 0 ] || { rst="error: $(head -1 <<<"$rev")"; nrev=0; }
+stats+=("github|reviews|$rst|$nrev|$([ "$nrev" -ge 100 ] && echo yes || echo no)")
 
 echo "## SESSIONS"
-clerk=$(c '.clerk_dir // empty'); glob=$(c '.transcripts_glob'); skips=$(c '.skip_projects // [] | join("|")')
+clerk=$(c '.clerk_dir // empty'); tdir=$(c '.transcripts_dir'); skips=$(c '.skip_projects // [] | join("|")')
 # clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
 # is read only when clerk has no summary for that session's project on that day.
 cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do jq -r --arg s "$(basename "$j" .json)" '"\(.cwd)\t\($s)"' "$j" 2>/dev/null; done )
@@ -61,8 +63,9 @@ while [[ ! "$d" > "$end" ]]; do
     done
   fi
   # Transcripts touched that day (worktree sessions included: each has its own project dir).
-  # shellcheck disable=SC2086
-  for t in $(find $(dirname "$glob") -maxdepth 1 -name '*.jsonl' -newermt "$d 00:00" ! -newermt "$(addday "$d") 00:00" 2>/dev/null); do
+  # Portable day filter: reference files stamped at local midnight, then find -newer (POSIX).
+  touch -t "${dd}0000" "$tmp/from" && touch -t "$(addday "$d" | tr -d -)0000" "$tmp/to" || { stats+=("transcript|$d|error: can't stamp reference files|0|-"); d=$(addday "$d"); continue; }
+  while IFS= read -r -d '' t; do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
     slug=$(awk -F'\t' -v c="$tcwd" '$1==c{print $2; exit}' <<<"$cwdmap")
@@ -74,7 +77,7 @@ while [[ ! "$d" > "$end" ]]; do
     bytes=${#txt}; hit=no; [ "$bytes" -gt $((cap_tkb*1024)) ] && hit=yes
     echo "### transcript $d $name"; head -c $((cap_tkb*1024)) <<<"$txt"; echo
     stats+=("transcript|$d $name|no clerk summary|$bytes B|$hit")
-  done
+  done < <(find "$tdir" -mindepth 2 -maxdepth 2 -name '*.jsonl' -newer "$tmp/from" ! -newer "$tmp/to" -print0)
   d=$(addday "$d")
 done
 

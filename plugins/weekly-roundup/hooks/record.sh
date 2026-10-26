@@ -1,9 +1,20 @@
 #!/bin/bash
-# PostToolUse recorder for roundup runs: logs result size of every Microsoft 365 call.
+# PostToolUse recorder for roundup runs (Microsoft 365 tools): result size, error flag, and the
+# continuation token the result returned (nextOffset/nextCursor), if any.
 run=${WEEKLY_ROUNDUP_RUN:-}
 [ -n "$run" ] || exit 0
-state=~/.local/state/weekly-roundup/$run
-mkdir -p "$state"
-jq -c --arg ts "$(date -u +%FT%TZ)" \
-  '{ts:$ts, phase:"post", tool:.tool_name, input:.tool_input, more:((.tool_response|tostring)|test("next(Offset|Cursor)")), bytes:(.tool_response|tostring|length), error:((.tool_response|tostring) as $r | ($r|test("\"(isError|is_error)\":true|\\b(401|403|404|429|5[0-9][0-9])\\b.{0,40}(Forbidden|Unauthorized|error|Error)")))}' >>"$state/calls.jsonl"
+command -v jq >/dev/null 2>&1 || exit 0
+state="$HOME/.local/state/weekly-roundup/$run"
+mkdir -p "$state" || exit 0
+jq -c --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+  # MCP results often carry JSON inside text content; look inside strings that parse as JSON too.
+  (.tool_response) as $r
+  | ([$r] + [$r | .. | strings | (try fromjson catch empty)]) as $docs
+  | {ts: $ts, phase: "post", tool: .tool_name,
+     key: ((.tool_name | ascii_downcase | ltrimstr("mcp__") | split("__")) as $p | "m365:" + ($p[1:] | join("__"))),
+     input: .tool_input,
+     bytes: ($r | tostring | length),
+     error: ([$r | .. | objects | (.isError?, .is_error?)] | any(. == true)),
+     next: ([$docs[] | .. | objects | (.nextOffset?, .nextCursor?) | select(. != null and . != "")] | first // null)}
+' >>"$state/calls.jsonl" 2>/dev/null
 exit 0

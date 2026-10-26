@@ -13,3 +13,17 @@ A Claude Code plugin marketplace. Each plugin lives in `plugins/<name>/` with it
 - Bump the plugin's `version` in both its `plugin.json` and `marketplace.json` on every change.
 - No personal or company data. Config, rules and logs live on each user's machine or in their team's repo.
 - Read the plugin's own `AGENTS.md` before changing it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `greer-david/claude-plugins` (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.

@@ -48,6 +48,10 @@ jira_posted: 0
 
 ## Unverified / gaps
 
+## Sweep stats
+
+<!-- pasted from scripts/sweep-local.sh STATS and scripts/run-stats.sh; not model-written -->
+
 ## Rule changes proposed
 
 **Rules applied:** 

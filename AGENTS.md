@@ -20,8 +20,16 @@ A Claude Code plugin with one skill, `/weekly-roundup`. It sweeps a week of work
 Keep claude.ai connectors off by default with `export ENABLE_CLAUDEAI_MCP_SERVERS=false` in your shell profile; don't use `disableClaudeAiConnectors`, because any `true` wins and can't be overridden per session. Connect Microsoft 365 at claude.ai → Settings → Connectors, then run the roundup with:
 
 ```
-env -u ENABLE_CLAUDEAI_MCP_SERVERS claude "/weekly-roundup"
+alias roundup='env -u ENABLE_CLAUDEAI_MCP_SERVERS WEEKLY_ROUNDUP_RUN=$(date +%Y%m%dT%H%M%S) claude "/weekly-roundup"'
 ```
+
+`WEEKLY_ROUNDUP_RUN` marks the session as a roundup run. Hooks then enforce M365 budgets and date windows and record calls to `~/.local/state/weekly-roundup/<run>/calls.jsonl`.
+
+## Scripts
+
+- `scripts/config-json`: config plus defaults as JSON (needs `/usr/bin/ruby`)
+- `scripts/sweep-local.sh START END`: deterministic git/gh/clerk/transcript sweep with caps and a STATS block
+- `scripts/run-stats.sh [RUN]`: M365 call table from the hook record
 
 ## Install (local)
 

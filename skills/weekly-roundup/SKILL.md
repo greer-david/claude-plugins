@@ -1,7 +1,7 @@
 ---
 name: weekly-roundup
 description: Build the weekly work log (Sun–Sat) and propose Jira updates for approval. Sweeps git/gh, Claude Code sessions (clerk summaries, raw transcripts as fallback) and Jira, applies the user's rules file, and posts nothing without row-by-row approval. Invoke on "/weekly-roundup", "weekly roundup", "what did I do this week", "draft my weekly update", "propose Jira updates for this week".
-argument-hint: "[week-start YYYY-MM-DD] [--dry-run]"
+argument-hint: "[week-start YYYY-MM-DD] [--dry-run] [--calibrate <manual-log>]"
 ---
 
 # Weekly roundup
@@ -22,10 +22,14 @@ Read `~/.config/weekly-roundup/config.yaml`. If it's missing, copy `templates/co
 - `jira`: `site`, `project`, `user` (display name)
 - `week_start_day`: `sunday` by default
 - `reviewers`: the names used in wording rules
-- `caps`: `findings_per_source` (40), `transcript_kb` (20), `emails` (150), `meetings` (60), `teams_threads` (60)
+- `caps`: `findings_per_source` (40), `transcript_kb` (20), `clerk_kb` (60), `commits_per_repo` (100). Enforced by `scripts/sweep-local.sh`.
+- `budgets`: maximum calls per M365 tool per run (e.g. `outlook_email_search: 12`, `read_resource: 40`, `default: 3`); `max_window_days` (8). Enforced by `hooks/guard.sh`.
 - `m365`: `noise_senders` (substrings or domains to drop), `mute_chats` (chat or channel names to skip)
 
 ## 1. Fix the window
+
+Run `scripts/config-json` (in the plugin root) to get the config with defaults.
+
 
 - Default: the week (from `week_start_day`) that contains today. If today is before the week's last day, the window ends now, and anything after the run lands in next week's log as **late from last week**.
 - An argument `YYYY-MM-DD` picks that week.
@@ -42,23 +46,20 @@ Each source is swept by its own subagent on **Haiku** (`model: haiku`), all in p
 
 `date | source | repo/project | refs (PR #, PBI-###, person) | one-line outcome | done / in progress / open`
 
-If a cap cuts results short, the subagent says so on its last line; record that under **Gaps**. If this week's log already exists, sweep only activity after its `run_at`.
+If this week's log already exists, sweep only activity after its `run_at`.
 
-1. **Git**: for each `repos` path, run `git log --all --author="$(git config user.email)" --since=<start> --until=<end> --format='%h %ad %s' --date=short`.
-2. **GitHub**: for each `github_repos` entry, run `gh pr list -R <repo> --author @me --state all --search "updated:>=<start>" --json number,title,state,mergedAt,url,headRefName`, plus `gh search prs --reviewed-by @me --updated ">=<start>"` for reviews.
-3. **Sessions**: the clerk summaries in `clerk_dir/summary/<YYYYMMDD>/*.md` for each day in the window. For any day with transcript activity (a `.jsonl` file modified that day) but no clerk summary, read those transcripts directly, but only the user turns and the final assistant message, up to `caps.transcript_kb` per session (use `jq`, never the whole file). Note under **Gaps** that clerk was behind. Skip `skip_projects`.
-4. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner, and nothing else.
-5. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`, read tools only). If the tools aren't loaded, the session was started without connectors. Tell the user to restart with `env -u ENABLE_CLAUDEAI_MCP_SERVERS claude "/weekly-roundup"`, or carry on and list M365 under Gaps. Split it across three subagents:
-   - **Email** (`outlook_email_search`, window only): everything the user sent, and everything received from real people or real groups/distribution lists. Drop automated mail: senders matching `m365.noise_senders`, no-reply addresses, notifications, newsletters, calendar notices, delivery reports. Read at most `caps.emails` messages, newest first, previews before full bodies. Return two kinds of findings: **work done** (what the user delivered, decided or answered) and **possibly missed** (asks, questions or commitments addressed to the user with no reply from them in the thread).
-   - **Calendar** (`outlook_calendar_search`): meetings the user attended or organized. Skip all-day, OOO, declined and cancelled events. At most `caps.meetings`.
-   - **Teams** (`chat_message_search`, `teams_list_chats`, `teams_list_channel_messages`): chats and channels with activity in the window from real people. Skip `m365.mute_chats` and bot posts. At most `caps.teams_threads` threads. Same two kinds of findings as email.
-   - Also run `sharepoint_search` for files the user edited in the window (decks, docs), at most 20 results.
-6. **Not available**: Claude web chats. Always list them under Gaps.
+1. **Local (git, GitHub, sessions)**: one subagent runs `scripts/sweep-local.sh <start> <end>` and turns its output into findings. The script is the only way to read these sources. Don't run your own `git log`, `gh` or transcript reads. It dedupes commits across worktrees, uses clerk summaries and falls back to transcripts (user turns plus final reply), and applies every cap in code. Return its `## STATS` block verbatim along with the findings.
+2. **Jira**: use the Atlassian MCP. Search the issues the user updated, commented on or was assigned in the window (`project = <project> AND (assignee = currentUser() OR updatedBy = currentUser()) AND updated >= <start>`), plus every ticket key mentioned by the other sources. Fetch each one's status, epic and owner, and nothing else.
+3. **Microsoft 365** (the claude.ai connector, `mcp__claude_ai_Microsoft_365__*`, read tools only). If the tools aren't loaded, the session was started without connectors. Tell the user to restart with the `roundup` alias (see the plugin README), or carry on and list M365 under Gaps. In a roundup run the guard hook enforces call budgets, and every search must pass ISO `afterDateTime`/`beforeDateTime` covering the window (max `max_window_days`). Plan calls to fit the budget: `limit: 25`, paging with `offset`. When a call is denied for budget, stop that source and note it under Gaps. Each M365 subagent also returns a **Dropped** list: sender or chat, count and reason (e.g. `noreply@x.com · 14 · automated`). Split it across three subagents:
+   - **Email** (`outlook_email_search`, window only): everything the user sent, and everything received from real people or real groups/distribution lists. Drop automated mail: senders matching `m365.noise_senders`, no-reply addresses, notifications, newsletters, calendar notices, delivery reports. Work from search previews; use `read_resource` only for threads that look like work done or a possibly-missed ask. Return two kinds of findings: **work done** (what the user delivered, decided or answered) and **possibly missed** (asks, questions or commitments addressed to the user with no reply from them in the thread).
+   - **Calendar** (`outlook_calendar_search`): meetings the user attended or organized. Skip all-day, OOO, declined and cancelled events. 
+   - **Teams** (`chat_message_search`, `teams_list_chats`, `teams_list_channel_messages`): chats and channels with activity in the window from real people. Skip `m365.mute_chats` and bot posts. Same two kinds of findings as email.
+   - Also run `sharepoint_search` for files the user edited in the window (decks, docs).
+4. **Not available**: Claude web chats. Always list them under Gaps.
 
 ## 4. Verify and classify
 
 This step and step 5 run in the main session, which only ever sees the findings lines.
-
 
 - Check every PR's scope and state with `gh pr view` before you describe it. Don't trust session summaries for scope.
 - Group the findings by theme (one theme per model, epic or workstream).
@@ -69,6 +70,8 @@ This step and step 5 run in the main session, which only ever sees the findings 
 ## 5. Write the log
 
 Fill in `templates/week.md` (or `log_template`), keeping the section order. Write it to `<log_dir>/<week-start>.md`. Fill in the frontmatter, including `jira_proposed` (the row count) and `jira_posted: 0`.
+
+**Sweep stats** are copied from code output, never written by you: paste the local `## STATS` block, then the output of `scripts/run-stats.sh` (M365 calls, budgets, KB read, denials from the hook record), then the M365 subagents' Dropped lists.
 
 Jira proposals: number the rows continuously. Each row has the ticket, the action (comment / status / new ticket / link-merge), the exact text in a quote block, the sources, and a confidence (high/med/low). Put them in three groups: **Review closely**, **Quick skim**, **Not posting (why)**. Status changes, new tickets and merges always go in a separate **Needs explicit approval** list, never in a group.
 
@@ -83,11 +86,15 @@ Show the user the path and the leadership summary, then ask for approvals in the
 
 ## 7. Learning step
 
-Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them to the rules file only after the user approves them. Never change rules silently.
+Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets, and "you missed X". For a miss, check the sweep stats: if a cap or budget was hit, or the item's sender is in a Dropped list, propose a **config change** (`budgets`, `caps`, `m365.noise_senders`) instead of a rule. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them to the rules file only after the user approves them. Never change rules silently.
+
+## Calibration
+
+`--calibrate <manual-log-path>`: run as `--dry-run` for that log's week, then diff. List items in the manual log that the skill missed, with the cap, budget or filter that hid each one per the sweep stats, and items the skill added that look like noise. Propose `config.yaml` changes. Write nothing else.
 
 ## Hard rules
 
-`hooks/guard.sh` enforces these outside the model: Microsoft 365 tools are on a read-only allow-list (everything else is denied), and every Jira/Confluence write needs a permission prompt. If the guard denies a call, don't look for another route; report it.
+`hooks/guard.sh` enforces these outside the model: Microsoft 365 tools are on a read-only allow-list (everything else is denied), and every Jira/Confluence write needs a permission prompt. In a roundup run it also enforces M365 call budgets and date windows, and records every call. If the guard denies a call, don't look for another route; report it.
 
 - Never post, transition, create or link in Jira without approval in this run.
 - Never send email or messages. The leadership summary is text the user sends.

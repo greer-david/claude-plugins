@@ -1,0 +1,20 @@
+#!/usr/bin/ruby
+# Print ~/.config/weekly-roundup/config.yaml (or $WEEKLY_ROUNDUP_CONFIG) as JSON, with defaults merged in.
+require "yaml"; require "json"
+path = ENV["WEEKLY_ROUNDUP_CONFIG"] || File.expand_path("~/.config/weekly-roundup/config.yaml")
+cfg = File.exist?(path) ? (YAML.safe_load(File.read(path)) || {}) : {}
+defaults = {
+  "caps" => { "findings_per_source" => 40, "transcript_kb" => 20, "clerk_kb" => 60, "commits_per_repo" => 100 },
+  "budgets" => {
+    "outlook_email_search" => 12, "read_resource" => 40, "outlook_calendar_search" => 4,
+    "chat_message_search" => 10, "teams_list_chats" => 2, "teams_list_teams" => 1,
+    "teams_list_channels" => 5, "teams_list_channel_messages" => 10, "sharepoint_search" => 2,
+    "search_people" => 10, "get_me" => 2, "default" => 3
+  },
+  "max_window_days" => 8
+}
+deep = ->(a, b) { a.merge(b) { |_, x, y| x.is_a?(Hash) && y.is_a?(Hash) ? deep.(x, y) : y } }
+out = deep.(defaults, cfg)
+%w[log_dir rules_file clerk_dir transcripts_glob].each { |k| out[k] = File.expand_path(out[k]) if out[k].is_a?(String) && !out[k].empty? }
+out["repos"] = (out["repos"] || []).map { |r| File.expand_path(r) }
+puts JSON.generate(out)

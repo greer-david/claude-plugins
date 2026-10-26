@@ -8,6 +8,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 cfg=$("$here/config-json")
 c() { jq -r "$1" <<<"$cfg"; }
 cap_commits=$(c '.caps.commits_per_repo'); cap_tkb=$(c '.caps.transcript_kb'); cap_ckb=$(c '.caps.clerk_kb')
+gh_user=$(c '.github_user // empty')
+if [ -n "$gh_user" ]; then GH_TOKEN=$(gh auth token --user "$gh_user" 2>/dev/null); export GH_TOKEN; fi
 end_next=$(date -j -v+1d -f %F "$end" +%F)
 stats=()
 

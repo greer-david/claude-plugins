@@ -9,16 +9,17 @@ f=$base/$run/calls.jsonl
 cfg=$("$here/config-json")
 echo "Run $run"
 echo
-echo "| M365 tool | calls allowed | budget | denied | result KB | budget hit |"
-echo "|---|---|---|---|---|---|"
+echo "| M365 tool | calls allowed | budget | denied | errors | result KB | budget hit |"
+echo "|---|---|---|---|---|---|---|"
 jq -rs --argjson b "$(jq '.budgets' <<<"$cfg")" '
   group_by(.tool|sub(".*__";""))[] as $g
   | ($g[0].tool|sub(".*__";"")) as $t
   | ($b[$t] // $b.default) as $bud
   | ([$g[]|select(.phase=="pre" and .decision=="allow")]|length) as $ok
   | ([$g[]|select(.phase=="pre" and .decision=="deny")]|length) as $no
+  | ([$g[]|select(.phase=="post" and .error==true)]|length) as $er
   | ([$g[]|select(.phase=="post")|.bytes]|add // 0) as $by
-  | "| \($t) | \($ok) | \($bud) | \($no) | \(($by/1024*10|floor)/10) | \(if $ok>=$bud then "yes" else "no" end) |"' "$f"
+  | "| \($t) | \($ok) | \($bud) | \($no) | \($er) | \(($by/1024*10|floor)/10) | \(if $ok>=$bud then "yes" else "no" end) |"' "$f"
 echo
 deny=$(jq -r 'select(.decision=="deny") | "- \(.tool|sub(".*__";"")): \(.reason)"' "$f" | sort | uniq -c)
 [ -n "$deny" ] && { echo "Denied calls:"; echo "$deny"; }

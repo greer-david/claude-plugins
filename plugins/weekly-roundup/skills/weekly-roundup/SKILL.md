@@ -73,7 +73,7 @@ This step and step 5 run in the main session, which only ever sees the findings 
 
 Fill in `templates/week.md` (or `log_template`), keeping the section order. Write it to `<log_dir>/<week-start>.md`. Fill in the frontmatter: copy `run_at`, `week_start`, `window_start` and `window_end` exactly from `start-run.sh`, plus `jira_proposed` (the row count) and `jira_posted: 0`.
 
-After the M365 subagents return, run `scripts/run-stats.sh`. If it lists **unread pages**, send that subagent back to fetch them (within budget) before writing the log. Whatever is still unread goes under Gaps.
+After the M365 subagents return, run `scripts/run-stats.sh`. If it lists **unread pages** or **omitted days**, send that subagent back to fetch or search them (within budget) before writing the log. Whatever is still unread or unsearched goes under Gaps.
 
 **Sweep stats** are copied from code output, never written by you: paste the local `## STATS` block, then the output of `scripts/run-stats.sh` (M365 calls, budgets, KB read, denials from the hook record), including its Dropped table, then the M365 subagents' Judgement drops, labelled as self-reported.
 

@@ -55,4 +55,20 @@ rec al "$(jq -nc '{tool_name:"mcp__M365__Teams_List_Chats", tool_input:{}, tool_
 rec al "$(jq -nc '{tool_name:"mcp__microsoft_365__a__b", tool_input:{}, tool_response:"x"}')"
 [ "$(jq -sr 'map(.key) | join(",")' "$HOME/.local/state/weekly-roundup/al/calls.jsonl")" = "m365:teams_list_chats,m365:__invalid__" ] \
   && echo "ok   recorder keys match the guard's classification" || { echo "FAIL recorder keys"; cat "$HOME/.local/state/weekly-roundup/al/calls.jsonl"; fail=1; }
+# Omitted days (#15): every local day of the window needs successful email and chat searches covering it.
+mkdir -p "$HOME/.local/state/weekly-roundup/od"
+echo '{"run_at":"2026-10-28T12:00:00Z","week_start":"2026-10-25","window_start":"2026-10-25T00:00:00Z","window_end":"2026-10-28T12:00:00Z"}' >"$HOME/.local/state/weekly-roundup/od/window.json"
+dq() { echo "{\"afterDateTime\":\"$1\",\"beforeDateTime\":\"$2\",\"offset\":0}"; }
+page od outlook_email_search "$(dq 2026-10-25 2026-10-26)" '[{"id":1}]'
+page od outlook_email_search "$(dq 2026-10-26T00:00:00Z 2026-10-26T12:00:00Z)" '[{"id":1}]'
+page od outlook_email_search "$(dq 2026-10-26T12:00Z 2026-10-27)" '[{"id":1}]'
+page od outlook_email_search "$(dq 2026-10-27 2026-10-28)" 'Error 502' true
+page od outlook_email_search "$(dq 2026-10-28 2026-10-28T12:00:00Z)" '[{"id":1}]'
+page od chat_message_search "$(dq 2026-10-26 2026-10-27)" '[{"id":1}]'
+out=$(TZ=UTC bash scripts/run-stats.sh od)
+grep -qx -- "- outlook_email_search: 2026-10-27" <<<"$out" && echo "ok   failed day reported, split day covered" || { echo "FAIL omitted email day"; echo "$out"; fail=1; }
+grep -qx -- "- chat_message_search: 2026-10-25, 2026-10-27, 2026-10-28" <<<"$out" && echo "ok   unsearched chat days reported" || { echo "FAIL omitted chat days"; echo "$out"; fail=1; }
+page od2 outlook_email_search "$(dq 2026-10-25 2026-10-29)" '[{"id":1}]'; page od2 chat_message_search "$(dq 2026-10-24 2026-10-29)" '[{"id":1}]'
+cp "$HOME/.local/state/weekly-roundup/od/window.json" "$HOME/.local/state/weekly-roundup/od2/"
+TZ=UTC bash scripts/run-stats.sh od2 | grep -q "Omitted days" && { echo "FAIL fully covered window"; fail=1; } || echo "ok   fully covered window: no omitted days"
 exit $fail

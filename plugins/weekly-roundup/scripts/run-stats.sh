@@ -36,6 +36,32 @@ unread=$(jq -rs '
       | .tool ]
   | group_by(.)[] | "- \(.[0] | sub(".*__"; "")): \(length) page\(if length == 1 then "" else "s" end) never fetched"' "$f")
 [ -n "$unread" ] && { echo "Unread pages (results said more exist; never fetched):"; echo "$unread"; echo; }
+# Omitted days: the skill's fixed plan searches email and chat once per local day of the window.
+# A day (clipped to the window) counts only if successful searches together cover all of it.
+win="$base/$run/window.json"
+if [ -f "$win" ]; then
+  omitted=$(jq -rs --slurpfile w "$win" --arg off "$(date +%z)" '
+    (($off[0:1] + "1" | tonumber) * (($off[1:3] | tonumber) * 3600 + ($off[3:5] | tonumber) * 60)) as $offs
+    | def inst: (capture("^(?<b>[0-9]{4}-[0-9]{2}-[0-9]{2})(?<t>T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?([.][0-9]+)?(?<z>Z|[+-][0-9]{2}:[0-9]{2})?$") // null)
+        | if . == null then null
+          else ((.b + ((.t // "T00:00:00") | if length == 6 then . + ":00" else . end)) | strptime("%Y-%m-%dT%H:%M:%S") | mktime)
+               - (if .z == null then $offs elif .z == "Z" then 0
+                  else (.z[0:1] + "1" | tonumber) * ((.z[1:3] | tonumber) * 3600 + (.z[4:6] | tonumber) * 60) end) end;
+      def day: . + $offs | strftime("%Y-%m-%d");
+      def midnight: strptime("%Y-%m-%d") | mktime - $offs;
+    ($w[0].window_start | fromdateiso8601) as $ws | ($w[0].window_end | fromdateiso8601) as $we
+    | [($ws | day | midnight) | recurse(. + 86400; . < $we) | {d: (. | day), s: ([., $ws] | max), e: ([. + 86400, $we] | min)}
+       | select(.s < .e)] as $days
+    | [.[] | select(.phase == "post" and (.error | not))] as $p
+    | ["outlook_email_search", "chat_message_search"][] as $t
+    | ([$p[] | select(.key == "m365:" + $t) | [(.input.afterDateTime // "" | tostring | inst), (.input.beforeDateTime // "" | tostring | inst)]
+        | select(.[0] != null and .[1] != null)] | sort) as $iv
+    | [$days[] | . as $d | (reduce $iv[] as $i ($d.s; if $i[0] <= . and $i[1] > . then $i[1] else . end)) as $reach
+       | select($reach < $d.e) | $d.d] as $miss
+    | select($miss | length > 0)
+    | "- \($t): \($miss | join(", "))"' "$f")
+  [ -n "$omitted" ] && { echo "Omitted days (no successful search covers them; the plan searches every day):"; echo "$omitted"; echo; }
+fi
 dropped=$(jq -rs '
   [.[] | select(.phase == "post") | .dropped[]?] | group_by([.who, .reason])
   | map({who: .[0].who, reason: .[0].reason, count: (map(.count) | add)}) | sort_by(-.count)[]

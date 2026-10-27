@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check a weekly log's window frontmatter against what scripts/start-run.sh recorded for this run.
 # Usage: check-log.sh LOG   (exit 1 with the problems found)
-# Checks: run_at, week_start and the window match the run; every "Possibly fell through the cracks"
+# Checks: run_at, week_start, the window and dry_run match the run; every "Possibly fell through the cracks"
 # bullet ends with a source tag (email <message id> | teams | github | jira | calendar | other), and
 # every email one names a message this run opened (read_resource) with the user in To (hooks/record.sh).
 set -u
@@ -9,11 +9,12 @@ log=${1:?usage: check-log.sh LOG}
 win="$HOME/.local/state/weekly-roundup/${WEEKLY_ROUNDUP_RUN:-}/window.json"
 [ -n "${WEEKLY_ROUNDUP_RUN:-}" ] && [ -f "$win" ] || { echo "check-log: no window recorded for this run; run scripts/start-run.sh first." >&2; exit 1; }
 [ -f "$log" ] || { echo "check-log: no log at $log" >&2; exit 1; }
-fm=$(awk 'NR==1 && !/^---/{exit} NR>1 && /^---/{exit} /^(run_at|week_start|window_start|window_end):/{k=$1; sub(":","",k); v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["\047]/,"",v); print k "\t" v}' "$log" \
+fm=$(awk 'NR==1 && !/^---/{exit} NR>1 && /^---/{exit} /^(run_at|week_start|window_start|window_end|dry_run):/{k=$1; sub(":","",k); v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["\047]/,"",v); print k "\t" v}' "$log" \
      | jq -Rn '[inputs | split("\t") | {(.[0]): .[1]}] | add // {}')
 bad=$(jq -rn --argjson fm "$fm" --slurpfile w "$win" '
   [("run_at", "week_start", "window_start", "window_end") as $k
-   | select($fm[$k] != $w[0][$k]) | "\($k): log has \($fm[$k] // "nothing"), run has \($w[0][$k])"] | .[]')
+   | select($fm[$k] != $w[0][$k]) | "\($k): log has \($fm[$k] // "nothing"), run has \($w[0][$k])"]
+  + (if ($fm.dry_run == "true") != ($w[0].dry_run // false) then ["dry_run: the log must have dry_run: true exactly when the run is a dry run (start-run.sh --dry-run)"] else [] end) | .[]')
 [ -z "$bad" ] || { echo "check-log: $log doesn't match this run. Copy these from scripts/start-run.sh:"; echo "$bad"; exit 1; }
 calls="$HOME/.local/state/weekly-roundup/$WEEKLY_ROUNDUP_RUN/calls.jsonl"
 reads=$( [ -f "$calls" ] && jq -sc '[.[] | select(.phase == "post" and .mail != null) | .mail]' "$calls" 2>/dev/null || echo '[]')

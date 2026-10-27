@@ -55,6 +55,15 @@ log 2026-10-18.md $'run_at: Friday morning\n'
 WEEKLY_ROUNDUP_RUN=garb WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh >/dev/null 2>&1 && bad "unparseable run_at rejected" || ok "unparseable run_at rejected"
 rm "$tmp/logs/"*
 
+# Dry runs: recorded in the run, and their logs don't move where the next run starts.
+log 2026-10-18.md $'week_end: 2026-10-24\nrun_at: 2026-10-23T13:00:00Z\nwindow_end: 2026-10-23T13:00:00Z\n'
+log 2026-10-25.md $'week_end: 2026-10-31\nrun_at: 2026-10-30T13:00:00Z\nwindow_end: 2026-10-30T13:00:00Z\ndry_run: true\n'
+want "dry-run log ignored: from the last real run" "$(win dr1)" "2026-10-23T13:00:00Z 2026-10-30T14:00:00Z 2026-10-25"
+out=$(WEEKLY_ROUNDUP_RUN=dr2 WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh --dry-run 2>/dev/null)
+[ "$(jq -r .dry_run <<<"$out")" = true ] && [ "$(jq -r .window_start <<<"$out")" = 2026-10-23T13:00:00Z ] && ok "--dry-run recorded" || bad "--dry-run recorded" "$out"
+want "--dry-run with --week" "$(win dr3 --week 2026-10-21 --dry-run)" "2026-10-18T00:00:00Z 2026-10-25T00:00:00Z 2026-10-18"
+[ "$(WEEKLY_ROUNDUP_RUN=dr1 WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh 2>/dev/null | jq -r '.dry_run // false')" = false ] && ok "real run: no dry_run" || bad "real run: no dry_run"
+rm "$tmp/logs/"*
 # check-log against run a (2026-10-25T00:00:00Z .. 2026-10-30T14:00:00Z, run_at 14:00)
 good=$'week_start: 2026-10-25\nrun_at: 2026-10-30T14:00:00Z\nwindow_start: 2026-10-25T00:00:00Z\nwindow_end: 2026-10-30T14:00:00Z\n'
 log w.md "$good"
@@ -64,6 +73,13 @@ WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && ba
 log w.md $'week_start: 2026-10-25\n'
 WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && bad "check-log: missing fields" || ok "check-log: missing fields"
 WEEKLY_ROUNDUP_RUN=none bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null 2>&1 && bad "check-log: no run window" || ok "check-log: no run window"
+log w.md "$good"$'dry_run: true\n'
+WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && bad "check-log: dry_run in a real run's log" || ok "check-log: dry_run in a real run's log"
+dgood=$(WEEKLY_ROUNDUP_RUN=dr2 bash scripts/start-run.sh 2>/dev/null | jq -r '"week_start: \(.week_start)\nrun_at: \(.run_at)\nwindow_start: \(.window_start)\nwindow_end: \(.window_end)"')
+log w.md "$dgood"$'\n'
+WEEKLY_ROUNDUP_RUN=dr2 bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && bad "check-log: dry run's log without dry_run" || ok "check-log: dry run's log without dry_run"
+log w.md "$dgood"$'\ndry_run: true\n'
+WEEKLY_ROUNDUP_RUN=dr2 bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && ok "check-log: dry run's log with dry_run" || bad "check-log: dry run's log with dry_run" "$(WEEKLY_ROUNDUP_RUN=dr2 bash scripts/check-log.sh "$tmp/logs/w.md")"
 # Possibly missed (#11): source tags, and email items must be opened messages with the user in To.
 echo "{\"log_dir\":\"$tmp/logs\",\"rules_file\":\"/tmp/r.md\",\"m365\":{\"my_addresses\":[\"Me@Example.com\"]}}" >"$tmp/c.json"
 opened() { # id to-address

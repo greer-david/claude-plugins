@@ -67,14 +67,14 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
 1. Type `roundup-session`, then `/weekly-roundup --dry-run`. It sweeps, writes the log and stops before proposing anything to Jira.
 2. Check the log: is the window at the top what you expected? Are the themes your real work? Read the sweep stats and the Dropped table: a hit cap or budget, or a sender you care about being dropped, means a config change. Anything under "possibly fell through the cracks" you already handled is a rule to add.
-3. A dry run still writes a log, and the next run starts where that log's window ends. So for the real run, type `roundup-session`, then `/weekly-roundup --since <the date your week started>` (or delete the dry-run log and type `roundup`). Approve rows with a message that is just `post 1-4`.
+3. When the log looks right, type `roundup` for the real run. A dry run's log doesn't count as covered, so the real run sweeps the same span again and updates the same log. Approve rows with a message that is just `post 1-4`.
 
 ## Weekly use
 
 - **Friday morning:** open a new terminal tab in your notes folder and type `roundup`. Review the log, then approve proposals with a message that is just `post 1-6, 9`. Status changes, new tickets and links must be named one by one (`post 12`). Only what you approved, with exactly the text in the log, can be posted, and Claude Code still asks before each post. If you edit a proposal, approve it again.
 - **A different week:** run `roundup-session`, then `/weekly-roundup 2026-10-18`.
 - **What each run covers:** from where your last log left off until now, so nothing is swept twice or skipped. Anything that happened before this week (say, Friday afternoon after last week's run) goes in this week's log, marked late. If your last run was over two weeks ago, the run starts at this week's start and tells you what it didn't cover; `/weekly-roundup --since 2026-10-01` covers more.
-- **Dry run:** `/weekly-roundup --dry-run` writes the log and stops before approval.
+- **Dry run:** `/weekly-roundup --dry-run` writes the log and stops before approval. The next run sweeps that span again.
 - **Tuning:** `/weekly-roundup <week> --calibrate <manual-log>` compares a run with a roundup you did by hand and proposes config changes.
 
 Your corrections become rule proposals at the end of each run. Personal rules are written after you approve them. Team rule changes come out as a diff for you to open as a PR in the team repo.

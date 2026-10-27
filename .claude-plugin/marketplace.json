@@ -7,7 +7,7 @@
       "name": "weekly-roundup",
       "source": "./plugins/weekly-roundup",
       "description": "Weekly work log from git, GitHub, Claude Code sessions, Jira and Microsoft 365, with Jira updates you approve row by row.",
-      "version": "0.5.4"
+      "version": "0.5.5"
     }
   ]
 }

@@ -12,9 +12,9 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `hooks/record.sh`: PostToolUse on MCP tools; for M365 and Atlassian, the call record for roundup runs (result bytes feed the guard's `budgets.total_kb` ceiling), and the noise filter (`noise_senders`, `alert_patterns`, `mute_chats` by chat ID) that rewrites email and chat search results via `updatedMCPToolOutput` and records Dropped counts
 - `scripts/config-json`: config plus defaults as JSON
 - `scripts/tz.sh`: sourced by the scripts; `offset_at`, `midnights DATE...` (each day's local midnight, with that day's own UTC offset) and `local_stamp` (docs/adr/0003)
-- `scripts/start-run.sh [--week D | --since X]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it
+- `scripts/start-run.sh [--week D | --since X] [--dry-run]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it. Logs marked `dry_run: true` never count as the previous run
 - `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
-- `scripts/check-log.sh LOG`: fails if the log's window frontmatter differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To
+- `scripts/check-log.sh LOG`: fails if the log's window frontmatter or dry_run differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To
 - `scripts/calibration-check.sh REPORT BASELINE`: `--calibrate` coverage check (every baseline item has a row with an allowed result and cause) that writes the totals and run-stats into the report
 - `scripts/run-stats.sh [RUN]`: M365 call table, errors, unread pages and omitted days (window days no successful email or chat search covered) from the call record
 - `tests/guard-test.sh`: guard self-test (classification, fail-closed, dates, parallel budgets)

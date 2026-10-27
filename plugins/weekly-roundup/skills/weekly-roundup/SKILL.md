@@ -34,7 +34,7 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 Run `scripts/start-run.sh` first, before any sweep. It records the run time and the window in code, once per run, and prints them as JSON (`run_at`, `week_start`, `window_start`, `window_end`, `reason`, and `gap` if any). Never compute or change these yourself.
 
 - Default: from where the previous log's window ended to now, so every moment is swept exactly once. With no previous log, or one more than `gap_days` (14) old, it starts at this week's start, and the uncovered span (`gap`) goes under Gaps.
-- An argument `YYYY-MM-DD` runs `start-run.sh --week YYYY-MM-DD` (that whole week). `--since DATE-OR-ISO` passes through to `start-run.sh --since`.
+- An argument `YYYY-MM-DD` runs `start-run.sh --week YYYY-MM-DD` (that whole week). `--since DATE-OR-ISO` passes through to `start-run.sh --since`. `--dry-run` passes through as `start-run.sh --dry-run` (with either); a dry run's log never counts as the previous run, so the next real run sweeps the same span again. `--calibrate` doesn't pass it: a calibration log covers its week.
 - The log is `<log_dir>/<week_start>.md`. Items dated before `week_start` are **late items**: put them in this log, marked late; never rewrite an older log. The local sweep marks them `[late]`; for Jira and M365 findings, compare the date yourself.
 - Read the previous log (if any) and bring forward its **carried items**: open **Pending verification** items and Jira proposals it left unposted.
 - If a log for this window already exists, update it in place. Never duplicate rows; keep the posted/skipped marks.
@@ -72,7 +72,7 @@ This step and step 5 run in the main session, which only ever sees the findings 
 
 ## 5. Write the log
 
-Fill in `templates/week.md` (or `log_template`), keeping the section order. Write it to `<log_dir>/<week-start>.md`. Fill in the frontmatter: copy `run_at`, `week_start`, `window_start` and `window_end` exactly from `start-run.sh`, plus `jira_proposed` (the row count) and `jira_posted: 0`. Then run `scripts/check-log.sh <log>` and fix what it reports until it prints `check-log: ok` (window frontmatter, possibly-missed source tags and To). Don't present the log for approval before that. A possibly-missed email it rejects moves to context or is dropped; don't remove its tag to get past the check.
+Fill in `templates/week.md` (or `log_template`), keeping the section order. Write it to `<log_dir>/<week-start>.md`. Fill in the frontmatter: copy `run_at`, `week_start`, `window_start` and `window_end` exactly from `start-run.sh` (and `dry_run: true` when it printed that), plus `jira_proposed` (the row count) and `jira_posted: 0`. Then run `scripts/check-log.sh <log>` and fix what it reports until it prints `check-log: ok` (window frontmatter and dry_run, possibly-missed source tags and To). Don't present the log for approval before that. A possibly-missed email it rejects moves to context or is dropped; don't remove its tag to get past the check.
 
 After the M365 subagents return, run `scripts/run-stats.sh`. If it lists **unread pages** or **omitted days**, send that subagent back to fetch or search them (within budget) before writing the log. Whatever is still unread or unsearched goes under Gaps.
 

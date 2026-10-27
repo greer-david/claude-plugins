@@ -5,16 +5,22 @@
 #   default:  previous log's run_at -> now. No previous log, or one older than gap_days: this week's start.
 #   --since:  that date (local midnight) or ISO instant -> now.
 #   --week:   the whole week containing that date (backfill, calibration); ends now if the week isn't over.
+#   --dry-run: records dry_run: true; logs with dry_run: true never count as the previous run.
 # Prints the window as JSON. Without WEEKLY_ROUNDUP_RUN it prints but saves nothing.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/tz.sh"
-mode=default; arg=
-case "${1:-}" in
-  --week|--since) mode=${1#--}; arg=${2:-}; [ -n "$arg" ] || { echo "start-run: $1 needs a value" >&2; exit 1; } ;;
-  "") ;;
-  *) echo "usage: start-run.sh [--week YYYY-MM-DD | --since DATE-OR-ISO]" >&2; exit 1 ;;
-esac
+mode=default; arg=; dry=false
+usage="usage: start-run.sh [--week YYYY-MM-DD | --since DATE-OR-ISO] [--dry-run]"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --week|--since) [ "$mode" = default ] || { echo "$usage" >&2; exit 1; }
+                    mode=${1#--}; arg=${2:-}; [ -n "$arg" ] || { echo "start-run: $1 needs a value" >&2; exit 1; }; shift ;;
+    --dry-run) dry=true ;;
+    *) echo "$usage" >&2; exit 1 ;;
+  esac
+  shift
+done
 run=${WEEKLY_ROUNDUP_RUN:-}
 state="$HOME/.local/state/weekly-roundup/$run"
 if [ -n "$run" ] && [ -f "$state/window.json" ]; then
@@ -28,9 +34,9 @@ log_dir=$(jq -r '.log_dir' <<<"$cfg")
 # earlier of run_at and the end of week_end (a backfill or calibration run is stamped after its week).
 logs=$(for f in "$log_dir"/*.md; do
   [ -f "$f" ] || continue
-  awk 'NR==1 && !/^---/{exit} NR>1 && /^---/{exit} /^(run_at|window_end|week_end):/{k=$1; sub(":","",k); v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["\047]/,"",v); print k "\t" v}' "$f" |
+  awk 'NR==1 && !/^---/{exit} NR>1 && /^---/{exit} /^(run_at|window_end|week_end|dry_run):/{k=$1; sub(":","",k); v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["\047]/,"",v); print k "\t" v}' "$f" |
     jq -Rn --arg f "$(basename "$f")" '[inputs | split("\t") | {(.[0]): .[1]}] | add + {file: $f}'
-done 2>/dev/null | jq -s 'map(select(.run_at or .window_end))')
+done 2>/dev/null | jq -s 'map(select((.run_at or .window_end) and .dry_run != "true"))')
 now=${WEEKLY_ROUNDUP_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 # Local midnight of every day the window rules can touch: around now and the argument (a week either
 # side), and around each previous log's dates.
@@ -42,7 +48,7 @@ mid=$(midnights $(jq -rn --arg now "$now" --arg arg "$arg" --argjson logs "${log
 
 out=$(jq -n --arg mode "$mode" --arg arg "$arg" --argjson logs "${logs:-[]}" \
   --arg wsd "$(jq -r '.week_start_day' <<<"$cfg")" --argjson gap "$(jq '.gap_days // 14' <<<"$cfg")" \
-  --arg now "$now" --argjson mid "$mid" '
+  --arg now "$now" --argjson mid "$mid" --argjson dry "$dry" '
   def iso: strftime("%Y-%m-%dT%H:%M:%SZ");
   def utcday: strptime("%Y-%m-%d") | mktime;
   def addday($n): utcday + 86400 * $n | strftime("%Y-%m-%d");
@@ -86,7 +92,7 @@ out=$(jq -n --arg mode "$mode" --arg arg "$arg" --argjson logs "${logs:-[]}" \
         else {week_start: $this_week, window_start: ($p | iso), window_end: ($n | iso), reason: "from the end of the previous log'"'"'s window \($prev)"}
         end
     end
-  | {run_at: ($n | iso)} + .
+  | {run_at: ($n | iso)} + . + (if $dry then {dry_run: true} else {} end)
   | if (.window_start | fromdateiso8601) >= (.window_end | fromdateiso8601) then error("empty window: \(.window_start) to \(.window_end)") else . end
 ') && [ -n "$out" ] || { echo "start-run: couldn't fix the window." >&2; exit 1; }
 if [ -n "$run" ]; then

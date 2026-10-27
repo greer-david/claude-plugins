@@ -34,6 +34,12 @@ want "--since overrides" "$(win e --since 2026-10-01)" "2026-10-01T00:00:00Z 202
 want "--week: the whole past week" "$(win f --week 2026-10-21)" "2026-10-18T00:00:00Z 2026-10-25T00:00:00Z 2026-10-18"
 want "--week: current week ends now" "$(win g --week 2026-10-27)" "2026-10-25T00:00:00Z 2026-10-30T14:00:00Z 2026-10-25"
 want "local midnight in UTC-5" "$(TZ=Etc/GMT+5 win h --week 2026-10-21)" "2026-10-18T05:00:00Z 2026-10-25T05:00:00Z 2026-10-18"
+# DST (US Central ends Sun 2026-11-01, starts Sun 2026-03-08): each day uses its own offset.
+want "DST end: week starts at CDT midnight" "$(TZ=America/Chicago N=2026-11-06T18:00:00Z win dst1)" "2026-11-01T05:00:00Z 2026-11-06T18:00:00Z 2026-11-01"
+want "DST end: --week ends at CST midnight" "$(TZ=America/Chicago N=2026-11-10T18:00:00Z win dst2 --week 2026-11-04)" "2026-11-01T05:00:00Z 2026-11-08T06:00:00Z 2026-11-01"
+want "DST end: Saturday 23:30 CST is still that week" "$(TZ=America/Chicago N=2026-11-08T05:30:00Z win dst3)" "2026-11-01T05:00:00Z 2026-11-08T05:30:00Z 2026-11-01"
+want "DST start: March week" "$(TZ=America/Chicago win dst4 --week 2026-03-10)" "2026-03-08T06:00:00Z 2026-03-15T05:00:00Z 2026-03-08"
+want "DST: zone-less --since uses that day's offset" "$(TZ=America/Chicago N=2026-11-06T18:00:00Z win dst5 --since 2026-11-03T09:00)" "2026-11-03T15:00:00Z 2026-11-06T18:00:00Z 2026-11-01"
 want "offset instant" "$(win i --since 2026-10-28T09:00:00-05:00)" "2026-10-28T14:00:00Z 2026-10-30T14:00:00Z 2026-10-25"
 
 for a in "--since 2026-02-30" "--since yesterday" "--week 2026-13-01" "--since 2026-11-01" "--bogus"; do

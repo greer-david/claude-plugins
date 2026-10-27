@@ -91,4 +91,10 @@ page se outlook_email_search '{}' 'HTTP 503 Service Unavailable'
 mkdir -p "$HOME/.local/state/weekly-roundup/od5"; cp "$HOME/.local/state/weekly-roundup/od/window.json" "$HOME/.local/state/weekly-roundup/od5/"
 page od5 chat_message_search '{"afterDateTime":"2026-10-25","beforeDateTime":"2026-10-29","query":"*","sender":"me@x.com"}' '[{"id":1}]'
 TZ=UTC bash scripts/run-stats.sh od5 | grep -q -- "- chat_message_search: 2026-10-25" && echo "ok   sender-filtered search doesn't cover days" || { echo "FAIL sender search credited"; fail=1; }
+# DST: day boundaries use each day's own offset (US Central ends Sun 2026-11-01).
+mkdir -p "$HOME/.local/state/weekly-roundup/od6"
+echo '{"run_at":"2026-11-03T06:00:00Z","week_start":"2026-11-01","window_start":"2026-11-01T05:00:00Z","window_end":"2026-11-03T06:00:00Z"}' >"$HOME/.local/state/weekly-roundup/od6/window.json"
+page od6 outlook_email_search "$(dq 2026-11-02T06:00:00Z 2026-11-03T06:00:00Z)" '[{"id":1}]'
+out=$(TZ=America/Chicago bash scripts/run-stats.sh od6)
+grep -qx -- "- outlook_email_search: 2026-11-01" <<<"$out" && echo "ok   DST: local days across the change" || { echo "FAIL DST omitted days"; echo "$out"; fail=1; }
 exit $fail

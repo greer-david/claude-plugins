@@ -43,4 +43,11 @@ echo '{"cwd":"'"$tmp"'/home-diary"}' >"$tmp/clerk/slug/diary.json"; echo '{"cwd"
 echo 'clerk diary note' >"$tmp/clerk/summary/20261021/diary.md"; echo 'clerk work note' >"$tmp/clerk/summary/20261021/main.md"; echo 'clerk orphan' >"$tmp/clerk/summary/20261021/unknown.md"
 cfg ',"clerk_dir":"'"$tmp"'/clerk"'; out=$(sw)
 grep -q 'clerk work note' <<<"$out" && ! grep -q 'clerk diary\|clerk orphan' <<<"$out" && echo "ok   clerk summaries allow-listed (unknown cwd skipped)" || { echo "FAIL clerk allow-list"; echo "$out"; fail=1; }
+# DST: a day's transcripts run from that day's local midnight (US Central ends Sun 2026-11-01).
+mkdir -p "$tmp/p/dst"; cfg ''
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"late sunday"}}' >"$tmp/p/dst/a.jsonl"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"late monday"}}' >"$tmp/p/dst/b.jsonl"
+TZ=America/Chicago touch -t 202611012330 "$tmp/p/dst/a.jsonl"; TZ=America/Chicago touch -t 202611022330 "$tmp/p/dst/b.jsonl"
+out=$(TZ=America/Chicago PATH="$tmp/bin:$PATH" bash scripts/sweep-local.sh 2026-11-02 2026-11-02 2>&1)
+grep -q 'late monday' <<<"$out" && ! grep -q 'late sunday' <<<"$out" && echo "ok   DST: transcript day from local midnight" || { echo "FAIL DST transcript day"; echo "$out"; fail=1; }
 exit $fail

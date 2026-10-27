@@ -22,7 +22,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 ## Requirements
 
 - macOS, Linux or WSL with `bash`, `jq`, `git` and `gh` (signed in to the GitHub account that sees your work repos)
-- The Atlassian MCP server in Claude Code, for Jira
+- The Atlassian MCP server in Claude Code, for Jira (setup step 2)
 - For Microsoft 365: the claude.ai **Microsoft 365** connector, connected at claude.ai → Settings → Connectors
 - Optional: [clerk](https://github.com/vulcanshen/clerk) for session summaries
 
@@ -37,13 +37,21 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Choose **user** scope.
 
-2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. Put your email addresses (aliases too) in `m365.my_addresses`: an email only counts as possibly missed when you're in its To line. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
+2. **Jira.** Add Atlassian's MCP server at user scope and sign in when it asks:
 
-3. **Rules.**
-   - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`, started from `templates/team-rules.md`) and change by PR. Point `team_rules_file` at your local clone.
+   ```
+   claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v1/mcp
+   ```
+
+   Keep `atlassian` (or `jira`, `confluence`, `rovo`) in the server's name: the safety hook recognises Jira tools by that name. Your site is the `<name>.atlassian.net` part of your Jira URL. Your project is the key your team's tickets start with (`ABC` in `ABC-123`).
+
+3. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `session_dirs` lists the folders whose Claude Code sessions are swept (default: your `repos`); see Privacy. Put your email addresses (aliases too) in `m365.my_addresses`: an email only counts as possibly missed when you're in its To line. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
+
+4. **Rules.**
+   - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`) and change by PR. Point `team_rules_file` at your local clone. If your team doesn't have the file yet, add one from `templates/team-rules.md` by PR, or leave `team_rules_file` out until it's merged; a path that doesn't exist is reported in every log.
    - **Personal rules:** copy `templates/rules.md` to wherever `rules_file` points. It starts empty and grows from your corrections.
 
-4. **Microsoft 365 only in roundup sessions (recommended).** Keep claude.ai connectors out of your everyday sessions and turn them on just for roundups. Add to `~/.zshrc` (or `~/.bashrc`):
+5. **Microsoft 365 only in roundup sessions (recommended).** Keep claude.ai connectors out of your everyday sessions and turn them on just for roundups. Add to `~/.zshrc` (or `~/.bashrc`):
 
    ```
    export ENABLE_CLAUDEAI_MCP_SERVERS=false
@@ -53,7 +61,13 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
-5. **Check the hook works:** run each script in `tests/` (`guard-test.sh`, `stats-test.sh`, `filter-test.sh`, `window-test.sh`, `approval-test.sh`) from the installed plugin folder. Every line should say `ok`.
+6. **Check the hook works:** from the installed plugin folder, run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, window). Every line should say `ok`. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
+
+## First run
+
+1. Type `roundup-session`, then `/weekly-roundup --dry-run`. It sweeps, writes the log and stops before proposing anything to Jira.
+2. Check the log: is the window at the top what you expected? Are the themes your real work? Read the sweep stats and the Dropped table: a hit cap or budget, or a sender you care about being dropped, means a config change. Anything under "possibly fell through the cracks" you already handled is a rule to add.
+3. A dry run still writes a log, and the next run starts where that log's window ends. So for the real run, type `roundup-session`, then `/weekly-roundup --since <the date your week started>` (or delete the dry-run log and type `roundup`). Approve rows with a message that is just `post 1-4`.
 
 ## Weekly use
 

@@ -9,29 +9,33 @@ set -u
 # Portable date math (no GNU/BSD date differences): ISO dates compare as strings.
 addday() { jq -rn --arg d "$1" --argjson n "${2:-1}" '$d|strptime("%Y-%m-%d")|mktime + 86400*$n|strftime("%Y-%m-%d")'; }
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/tz.sh"
 win="$HOME/.local/state/weekly-roundup/${WEEKLY_ROUNDUP_RUN:-}/window.json"
 if [ $# -ge 2 ]; then since=$1; until=$2; week_start=${3:-}
 elif [ -n "${WEEKLY_ROUNDUP_RUN:-}" ] && [ -f "$win" ]; then
   since=$(jq -r .window_start "$win"); until=$(jq -r .window_end "$win"); week_start=$(jq -r .week_start "$win")
 else echo "usage: sweep-local.sh SINCE UNTIL (or run scripts/start-run.sh first in a roundup run)" >&2; exit 1; fi
-# Normalize to UTC instants plus the local days they span. touch -t wants local YYYYMMDDhhmm.SS.
-w=$(jq -n --arg s "$since" --arg u "$until" --arg off "$(date +%z)" '
-  (($off[0:1] + "1" | tonumber) * (($off[1:3] | tonumber) * 3600 + ($off[3:5] | tonumber) * 60)) as $offs
-  | def day: test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
-    def t($end): if day then (strptime("%Y-%m-%d") | mktime) - $offs + (if $end then 86400 else 0 end)
+# Normalize to UTC instants plus the local days they span, each day with its own UTC offset.
+mid=$(midnights $(day_range "$(addday "${since:0:10}" -2 2>/dev/null)" "$(addday "${until:0:10}" 2 2>/dev/null)")) \
+  || { echo "sweep-local: bad window $since .. $until (or can't read the local UTC offset from date)" >&2; exit 1; }
+w=$(jq -n --arg s "$since" --arg u "$until" --argjson mid "$mid" '
+  def midnight: . as $d | $mid[$d] // error("no local midnight for \($d)");
+  def addday($n): strptime("%Y-%m-%d") | mktime + 86400 * $n | strftime("%Y-%m-%d");
+  def localday: . as $t | [($t - 86400, $t, $t + 86400) | strftime("%Y-%m-%d") | select($mid[.] != null and $mid[.] <= $t)] | max;
+  def day: test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+    def t($end): if day then (if $end then addday(1) else . end) | midnight
       else . as $in | (capture("^(?<b>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2})(?<s>:[0-9]{2})?([.][0-9]+)?(?<z>Z|[+-][0-9]{2}:[0-9]{2})?$")
              // error("not an ISO date or instant: \($in)"))
         | ((.b + (.s // ":00")) | strptime("%Y-%m-%dT%H:%M:%S") | mktime)
-          - (if .z == null then $offs elif .z == "Z" then 0
+          - (if .z == null then (.b[0:10] | (strptime("%Y-%m-%d") | mktime) - midnight) elif .z == "Z" then 0
              else (.z[0:1] + "1" | tonumber) * ((.z[1:3] | tonumber) * 3600 + (.z[4:6] | tonumber) * 60) end) end;
   ($s | t(false)) as $a | ($u | t(true)) as $b
   | if $a >= $b then error("empty window") else . end
   | {a: $a, b: $b, since: ($a | todate), until: ($b | todate),
-     first: ($a + $offs | strftime("%Y-%m-%d")), last: ($b - 1 + $offs | strftime("%Y-%m-%d")), offs: $offs}') \
+     first: ($a | localday), last: ($b - 1 | localday), mid: $mid}') \
   || { echo "sweep-local: bad window $since .. $until" >&2; exit 1; }
 wv() { jq -r ".$1" <<<"$w"; }
 since=$(wv since); until=$(wv until); start=$(wv first); end=$(wv last)
-stamp() { jq -rn --argjson t "$1" --argjson o "$(wv offs)" '$t + $o | strftime("%Y%m%d%H%M.%S")'; }
 late() { [ -n "$week_start" ] && [[ "$1" < "$week_start" ]] && printf '[late] '; }
 cfg=$("$here/config-json") || { echo "sweep-local: config failed to load; nothing swept." >&2; exit 1; }
 c() { jq -r "$1" <<<"$cfg"; }
@@ -105,8 +109,8 @@ while [[ ! "$d" > "$end" ]]; do
   # Transcripts touched that day (worktree sessions included: each has its own project dir).
   # Portable day filter: reference files stamped at local midnight, then find -newer (POSIX).
   # Clipped to the window: from max(local midnight, window start) to min(next midnight, window end).
-  t0=$(jq -rn --arg d "$d" --argjson w "$w" '($d | strptime("%Y-%m-%d") | mktime) - $w.offs | [([., $w.a] | max), ([. + 86400, $w.b] | min)] | @tsv')
-  touch -t "$(stamp "${t0%%$'\t'*}")" "$tmp/from" && touch -t "$(stamp "${t0#*$'\t'}")" "$tmp/to" || { stats+=("transcript|$d|error: can't stamp reference files|0|-"); d=$(addday "$d"); continue; }
+  t0=$(jq -rn --arg d "$d" --argjson w "$w" '$w.mid as $m | [([$m[$d], $w.a] | max), ([$m[$d | strptime("%Y-%m-%d") | mktime + 86400 | strftime("%Y-%m-%d")], $w.b] | min)] | @tsv')
+  touch -t "$(local_stamp "${t0%%$'\t'*}")" "$tmp/from" && touch -t "$(local_stamp "${t0#*$'\t'}")" "$tmp/to" || { stats+=("transcript|$d|error: can't stamp reference files|0|-"); d=$(addday "$d"); continue; }
   while IFS= read -r -d '' t; do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)

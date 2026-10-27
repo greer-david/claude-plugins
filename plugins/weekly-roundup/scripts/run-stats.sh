@@ -2,6 +2,7 @@
 # Sweep stats for a roundup run, built only from the hook record (not from the model).
 # Usage: run-stats.sh [RUN_ID]   (default: $WEEKLY_ROUNDUP_RUN, else the latest run)
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/tz.sh"
 base=~/.local/state/weekly-roundup
 run=${1:-${WEEKLY_ROUNDUP_RUN:-$(ls -1 "$base" 2>/dev/null | sort | tail -1)}}
 f=$base/$run/calls.jsonl
@@ -41,18 +42,19 @@ unread=$(jq -rs '
 # Only the plan's broad searches count (query "*" or none, no other narrowing field such as folderName or sender); a time without a zone
 # is UTC, as in the guard.
 win="$base/$run/window.json"
-if [ -f "$win" ]; then
-  omitted=$(jq -rs --slurpfile w "$win" --arg off "$(date +%z)" '
-    (($off[0:1] + "1" | tonumber) * (($off[1:3] | tonumber) * 3600 + ($off[3:5] | tonumber) * 60)) as $offs
-    | def inst: (capture("^(?<b>[0-9]{4}-[0-9]{2}-[0-9]{2})(?<t>T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?([.][0-9]+)?(?<z>Z|[+-][0-9]{2}:[0-9]{2})?$") // null)
+if [ -f "$win" ] && mid=$(midnights $(day_range "$(jq -r '.window_start | fromdateiso8601 - 86400 | strftime("%Y-%m-%d")' "$win")" \
+                                    "$(jq -r '.window_end | fromdateiso8601 + 86400 | strftime("%Y-%m-%d")' "$win")")); then
+  omitted=$(jq -rs --slurpfile w "$win" --argjson mid "$mid" '
+    def inst: (capture("^(?<b>[0-9]{4}-[0-9]{2}-[0-9]{2})(?<t>T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?([.][0-9]+)?(?<z>Z|[+-][0-9]{2}:[0-9]{2})?$") // null)
         | if . == null then null
           else ((.b + ((.t // "T00:00:00") | if length == 6 then . + ":00" else . end)) | strptime("%Y-%m-%dT%H:%M:%S") | mktime)
                - (if .z == null then  0 elif .z == "Z" then 0
                   else (.z[0:1] + "1" | tonumber) * ((.z[1:3] | tonumber) * 3600 + (.z[4:6] | tonumber) * 60) end) end;
-      def day: . + $offs | strftime("%Y-%m-%d");
-      def midnight: strptime("%Y-%m-%d") | mktime - $offs;
+      def day: . as $t | [($t - 86400, $t, $t + 86400) | strftime("%Y-%m-%d") | select($mid[.] != null and $mid[.] <= $t)] | max;
+      def midnight: $mid[.];
+      def next: strptime("%Y-%m-%d") | mktime + 86400 | strftime("%Y-%m-%d") | midnight;
     ($w[0].window_start | fromdateiso8601) as $ws | ($w[0].window_end | fromdateiso8601) as $we
-    | [($ws | day | midnight) | recurse(. + 86400; . < $we) | {d: (. | day), s: ([., $ws] | max), e: ([. + 86400, $we] | min)}
+    | [($ws | day) | recurse(next as $n | if $n < $we then $n | day else empty end) | {d: ., s: ([midnight, $ws] | max), e: ([next, $we] | min)}
        | select(.s < .e)] as $days
     | [.[] | select(.phase == "post" and (.error | not))] as $p
     | ["outlook_email_search", "chat_message_search"][] as $t
@@ -64,6 +66,8 @@ if [ -f "$win" ]; then
     | select($miss | length > 0)
     | "- \($t): \($miss | join(", "))"' "$f")
   [ -n "$omitted" ] && { echo "Omitted days (no successful search covers them; the plan searches every day):"; echo "$omitted"; echo; }
+elif [ -f "$win" ]; then
+  echo "Omitted days: not checked (can't read the local UTC offset from date)."; echo
 fi
 dropped=$(jq -rs '
   [.[] | select(.phase == "post") | .dropped[]?] | group_by([.who, .reason])

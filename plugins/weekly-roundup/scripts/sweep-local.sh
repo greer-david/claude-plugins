@@ -16,6 +16,8 @@ elif [ -n "${WEEKLY_ROUNDUP_RUN:-}" ] && [ -f "$win" ]; then
   since=$(jq -r .window_start "$win"); until=$(jq -r .window_end "$win"); week_start=$(jq -r .week_start "$win")
 else echo "usage: sweep-local.sh SINCE UNTIL (or run scripts/start-run.sh first in a roundup run)" >&2; exit 1; fi
 # Normalize to UTC instants plus the local days they span, each day with its own UTC offset.
+since=$(local_to_utc "$since") && until=$(local_to_utc "$until") \
+  || { echo "sweep-local: can't read the local UTC offset from date" >&2; exit 1; }
 mid=$(midnights $(day_range "$(addday "${since:0:10}" -2 2>/dev/null)" "$(addday "${until:0:10}" 2 2>/dev/null)")) \
   || { echo "sweep-local: bad window $since .. $until (or can't read the local UTC offset from date)" >&2; exit 1; }
 w=$(jq -n --arg s "$since" --arg u "$until" --argjson mid "$mid" '

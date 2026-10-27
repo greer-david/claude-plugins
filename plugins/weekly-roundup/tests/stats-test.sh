@@ -97,4 +97,11 @@ echo '{"run_at":"2026-11-03T06:00:00Z","week_start":"2026-11-01","window_start":
 page od6 outlook_email_search "$(dq 2026-11-02T06:00:00Z 2026-11-03T06:00:00Z)" '[{"id":1}]'
 out=$(TZ=America/Chicago bash scripts/run-stats.sh od6)
 grep -qx -- "- outlook_email_search: 2026-11-01" <<<"$out" && echo "ok   DST: local days across the change" || { echo "FAIL DST omitted days"; echo "$out"; fail=1; }
+# Zones ahead of UTC: the window's last local day still gets checked.
+mkdir -p "$HOME/.local/state/weekly-roundup/od7"
+echo '{"run_at":"2026-10-27T18:00:00Z","week_start":"2026-10-25","window_start":"2026-10-24T13:30:00Z","window_end":"2026-10-27T18:00:00Z"}' >"$HOME/.local/state/weekly-roundup/od7/window.json"
+page od7 outlook_email_search "$(dq 2026-10-24T13:30:00Z 2026-10-27T18:00:00Z)" '[{"id":1}]'
+out=$(TZ=Australia/Adelaide bash scripts/run-stats.sh od7)
+grep -qx -- "- chat_message_search: 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28" <<<"$out" && echo "ok   zone ahead of UTC: last local day checked" || { echo "FAIL Adelaide omitted days"; echo "$out"; fail=1; }
+. scripts/tz.sh; midnights 2026-13-45 >/dev/null 2>&1 && { echo "FAIL midnights accepts a bad date"; fail=1; } || echo "ok   midnights fails on a bad date"
 exit $fail

@@ -64,6 +64,10 @@ out=$(WEEKLY_ROUNDUP_RUN=dr2 WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh -
 want "--dry-run with --week" "$(win dr3 --week 2026-10-21 --dry-run)" "2026-10-18T00:00:00Z 2026-10-25T00:00:00Z 2026-10-18"
 [ "$(WEEKLY_ROUNDUP_RUN=dr1 WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh 2>/dev/null | jq -r '.dry_run // false')" = false ] && ok "real run: no dry_run" || bad "real run: no dry_run"
 rm "$tmp/logs/"*
+# Review fixes: zone-less times after a change, mode mismatch on a saved window.
+want "DST start: zone-less --since after the change" "$(TZ=America/Chicago N=2026-03-10T18:00:00Z win rv1 --since 2026-03-08T12:00)" "2026-03-08T17:00:00Z 2026-03-10T18:00:00Z 2026-03-08"
+WEEKLY_ROUNDUP_RUN=dr1 WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh --dry-run >/dev/null 2>&1 && bad "--dry-run on a saved real run rejected" || ok "--dry-run on a saved real run rejected"
+WEEKLY_ROUNDUP_RUN=dr2 WEEKLY_ROUNDUP_NOW=$NOW bash scripts/start-run.sh --dry-run >/dev/null 2>&1 && ok "--dry-run on a saved dry run kept" || bad "--dry-run on a saved dry run kept"
 # check-log against run a (2026-10-25T00:00:00Z .. 2026-10-30T14:00:00Z, run_at 14:00)
 good=$'week_start: 2026-10-25\nrun_at: 2026-10-30T14:00:00Z\nwindow_start: 2026-10-25T00:00:00Z\nwindow_end: 2026-10-30T14:00:00Z\n'
 log w.md "$good"
@@ -75,7 +79,7 @@ WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && ba
 WEEKLY_ROUNDUP_RUN=none bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null 2>&1 && bad "check-log: no run window" || ok "check-log: no run window"
 log w.md "$good"$'dry_run: true\n'
 WEEKLY_ROUNDUP_RUN=a bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && bad "check-log: dry_run in a real run's log" || ok "check-log: dry_run in a real run's log"
-dgood=$(WEEKLY_ROUNDUP_RUN=dr2 bash scripts/start-run.sh 2>/dev/null | jq -r '"week_start: \(.week_start)\nrun_at: \(.run_at)\nwindow_start: \(.window_start)\nwindow_end: \(.window_end)"')
+dgood=$(WEEKLY_ROUNDUP_RUN=dr2 bash scripts/start-run.sh --dry-run 2>/dev/null | jq -r '"week_start: \(.week_start)\nrun_at: \(.run_at)\nwindow_start: \(.window_start)\nwindow_end: \(.window_end)"')
 log w.md "$dgood"$'\n'
 WEEKLY_ROUNDUP_RUN=dr2 bash scripts/check-log.sh "$tmp/logs/w.md" >/dev/null && bad "check-log: dry run's log without dry_run" || ok "check-log: dry run's log without dry_run"
 log w.md "$dgood"$'\ndry_run: true\n'

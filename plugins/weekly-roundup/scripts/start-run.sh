@@ -24,9 +24,13 @@ done
 run=${WEEKLY_ROUNDUP_RUN:-}
 state="$HOME/.local/state/weekly-roundup/$run"
 if [ -n "$run" ] && [ -f "$state/window.json" ]; then
+  [ "$(jq -r '.dry_run // false' "$state/window.json")" = "$dry" ] \
+    || { echo "start-run: this run's window is already fixed as a $( [ "$dry" = true ] && echo real || echo dry) run; start a new run (new WEEKLY_ROUNDUP_RUN) for a $( [ "$dry" = true ] && echo dry || echo real) run." >&2; exit 1; }
   [ "$mode" = default ] || echo "start-run: this run's window is already fixed; ignoring --$mode." >&2
   cat "$state/window.json"; exit 0
 fi
+# A --since time without a zone is local time at that instant (date knows the offset; jq doesn't).
+[ "$mode" = since ] && { arg=$(local_to_utc "$arg") || { echo "start-run: can't read the local UTC offset from date." >&2; exit 1; }; }
 cfg=$("$here/config-json") || { echo "start-run: config failed to load." >&2; exit 1; }
 log_dir=$(jq -r '.log_dir' <<<"$cfg")
 

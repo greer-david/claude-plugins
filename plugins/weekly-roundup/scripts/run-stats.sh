@@ -42,8 +42,8 @@ unread=$(jq -rs '
 # Only the plan's broad searches count (query "*" or none, no other narrowing field such as folderName or sender); a time without a zone
 # is UTC, as in the guard.
 win="$base/$run/window.json"
-if [ -f "$win" ] && mid=$(midnights $(day_range "$(jq -r '.window_start | fromdateiso8601 - 86400 | strftime("%Y-%m-%d")' "$win")" \
-                                    "$(jq -r '.window_end | fromdateiso8601 + 86400 | strftime("%Y-%m-%d")' "$win")")); then
+if [ -f "$win" ] && mid=$(midnights $(day_range "$(jq -r '.window_start | fromdateiso8601 - 2 * 86400 | strftime("%Y-%m-%d")' "$win")" \
+                                    "$(jq -r '.window_end | fromdateiso8601 + 2 * 86400 | strftime("%Y-%m-%d")' "$win")")); then
   omitted=$(jq -rs --slurpfile w "$win" --argjson mid "$mid" '
     def inst: (capture("^(?<b>[0-9]{4}-[0-9]{2}-[0-9]{2})(?<t>T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?([.][0-9]+)?(?<z>Z|[+-][0-9]{2}:[0-9]{2})?$") // null)
         | if . == null then null
@@ -51,7 +51,7 @@ if [ -f "$win" ] && mid=$(midnights $(day_range "$(jq -r '.window_start | fromda
                - (if .z == null then  0 elif .z == "Z" then 0
                   else (.z[0:1] + "1" | tonumber) * ((.z[1:3] | tonumber) * 3600 + (.z[4:6] | tonumber) * 60) end) end;
       def day: . as $t | [($t - 86400, $t, $t + 86400) | strftime("%Y-%m-%d") | select($mid[.] != null and $mid[.] <= $t)] | max;
-      def midnight: $mid[.];
+      def midnight: . as $d | $mid[$d] // error("no local midnight for \($d)");
       def next: strptime("%Y-%m-%d") | mktime + 86400 | strftime("%Y-%m-%d") | midnight;
     ($w[0].window_start | fromdateiso8601) as $ws | ($w[0].window_end | fromdateiso8601) as $we
     | [($ws | day) | recurse(next as $n | if $n < $we then $n | day else empty end) | {d: ., s: ([midnight, $ws] | max), e: ([next, $we] | min)}
@@ -64,7 +64,7 @@ if [ -f "$win" ] && mid=$(midnights $(day_range "$(jq -r '.window_start | fromda
     | [$days[] | . as $d | (reduce $iv[] as $i ($d.s; if $i[0] <= . and $i[1] > . then $i[1] else . end)) as $reach
        | select($reach < $d.e) | $d.d] as $miss
     | select($miss | length > 0)
-    | "- \($t): \($miss | join(", "))"' "$f")
+    | "- \($t): \($miss | join(", "))"' "$f") || omitted="- not checked: the local days couldn't be worked out"
   [ -n "$omitted" ] && { echo "Omitted days (no successful search covers them; the plan searches every day):"; echo "$omitted"; echo; }
 elif [ -f "$win" ]; then
   echo "Omitted days: not checked (can't read the local UTC offset from date)."; echo

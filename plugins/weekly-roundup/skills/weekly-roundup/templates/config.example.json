@@ -14,7 +14,7 @@
   "caps": { "findings_per_source": 40, "transcript_kb": 96, "clerk_kb": 60, "commits_per_repo": 100 },
   "budgets": {
     "outlook_email_search": 30, "read_resource": 40, "outlook_calendar_search": 4,
-    "chat_message_search": 24, "teams_list_channel_messages": 10, "sharepoint_search": 5, "default": 3, "total_kb": 1024
+    "chat_message_search": 30, "teams_list_channel_messages": 10, "sharepoint_search": 5, "default": 3, "total_kb": 1024
   },
   "max_window_days": 8,
   "gap_days": 14,

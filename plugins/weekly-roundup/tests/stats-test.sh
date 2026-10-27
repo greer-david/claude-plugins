@@ -87,4 +87,8 @@ rec se "$(jq -nc --arg t "${M}outlook_email_search" '{tool_name:$t, tool_input:{
 [ "$(jq -s '.[-1].error' "$HOME/.local/state/weekly-roundup/se/calls.jsonl")" = false ] && echo "ok   error words in a structured field aren't an error" || { echo "FAIL structured field read as error"; tail -1 "$HOME/.local/state/weekly-roundup/se/calls.jsonl"; fail=1; }
 page se outlook_email_search '{}' 'HTTP 503 Service Unavailable'
 [ "$(jq -s '.[-1].error' "$HOME/.local/state/weekly-roundup/se/calls.jsonl")" = true ] && echo "ok   HTTP error text still an error" || { echo "FAIL HTTP text error lost"; fail=1; }
+# A sender-filtered search (or any other narrowing field) doesn't cover a day either.
+mkdir -p "$HOME/.local/state/weekly-roundup/od5"; cp "$HOME/.local/state/weekly-roundup/od/window.json" "$HOME/.local/state/weekly-roundup/od5/"
+page od5 chat_message_search '{"afterDateTime":"2026-10-25","beforeDateTime":"2026-10-29","query":"*","sender":"me@x.com"}' '[{"id":1}]'
+TZ=UTC bash scripts/run-stats.sh od5 | grep -q -- "- chat_message_search: 2026-10-25" && echo "ok   sender-filtered search doesn't cover days" || { echo "FAIL sender search credited"; fail=1; }
 exit $fail

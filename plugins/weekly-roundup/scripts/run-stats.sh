@@ -38,7 +38,7 @@ unread=$(jq -rs '
 [ -n "$unread" ] && { echo "Unread pages (results said more exist; never fetched):"; echo "$unread"; echo; }
 # Omitted days: the skill's fixed plan searches email and chat once per local day of the window.
 # A day (clipped to the window) counts only if successful searches together cover all of it.
-# Only the plan's broad searches count (query "*" or none, no folderName); a time without a zone
+# Only the plan's broad searches count (query "*" or none, no other narrowing field such as folderName or sender); a time without a zone
 # is UTC, as in the guard.
 win="$base/$run/window.json"
 if [ -f "$win" ]; then
@@ -56,7 +56,8 @@ if [ -f "$win" ]; then
        | select(.s < .e)] as $days
     | [.[] | select(.phase == "post" and (.error | not))] as $p
     | ["outlook_email_search", "chat_message_search"][] as $t
-    | ([$p[] | select(.key == "m365:" + $t and (.input.query // "*") == "*" and .input.folderName == null) | [(.input.afterDateTime // "" | tostring | inst), (.input.beforeDateTime // "" | tostring | inst)]
+    | ([$p[] | select(.key == "m365:" + $t and (.input.query // "*") == "*"
+                 and ((.input // {}) | keys - ["query", "afterDateTime", "beforeDateTime", "offset", "cursor", "limit"] == [])) | [(.input.afterDateTime // "" | tostring | inst), (.input.beforeDateTime // "" | tostring | inst)]
         | select(.[0] != null and .[1] != null)] | sort) as $iv
     | [$days[] | . as $d | (reduce $iv[] as $i ($d.s; if $i[0] <= . and $i[1] > . then $i[1] else . end)) as $reach
        | select($reach < $d.e) | $d.d] as $miss

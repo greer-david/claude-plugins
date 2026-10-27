@@ -17,7 +17,7 @@ jq -e --arg home "$HOME" '
     skip_projects: [], repos: [], github_repos: [],
     caps: {findings_per_source: 40, transcript_kb: 96, clerk_kb: 60, commits_per_repo: 100},
     budgets: {outlook_email_search: 30, read_resource: 40, outlook_calendar_search: 4,
-              chat_message_search: 24, teams_list_chats: 2, teams_list_teams: 1,
+              chat_message_search: 30, teams_list_chats: 2, teams_list_teams: 1,
               teams_list_channels: 5, teams_list_channel_messages: 10, sharepoint_search: 5,
               search_people: 10, get_me: 2, default: 3, total_kb: 1024},
     max_window_days: 8, gap_days: 14,

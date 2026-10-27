@@ -25,4 +25,5 @@ grep -q "isn't in the baseline" <<<"$(chk "$rows"$'| B9 | found | x | |\n')" && 
 grep -q "more than one row for B1" <<<"$(chk "$rows"$'| B1 | missed | | cap |\n')" && ok "repeated item fails" || bad "repeated item"
 grep -q "result must be" <<<"$(chk "${rows/| B1 | found/| B1 | partly}")" && ok "bad result fails" || bad "bad result"
 grep -q "names what hid it" <<<"$(chk "${rows/| B2 | missed | | filter |/| B2 | missed | | |}")" && ok "missed without a cause fails" || bad "missed without cause"
+out=$(chk "${rows/| B2 | missed | | filter |/| B2 | missed | found only by an extra search | off-plan |}") && grep -q "Missed by cause: off-plan 1" <<<"$out" && ok "off-plan is a miss cause" || bad "off-plan cause" "$out"
 exit $fail

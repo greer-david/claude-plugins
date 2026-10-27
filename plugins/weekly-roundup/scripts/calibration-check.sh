@@ -4,7 +4,7 @@
 #   BASELINE: one item per line, "- B<n> · <source> · <summary>" (written once, reviewed by the user).
 #   REPORT:   a table row per baseline item, "| B<n> | found / missed / outside-overlap | <skill item> | <what hid it> |",
 #             where a missed row names what hid it: cap, budget, ceiling, filter, omitted day, unread page,
-#             judgement or not swept; and noise rows "| N<n> | <skill item> | <why it's noise> |".
+#             judgement, not swept or off-plan; and noise rows "| N<n> | <skill item> | <why it's noise> |".
 # Fails (exit 1) if a baseline item has no row, a row names an unknown or repeated item, or a value isn't
 # allowed. Otherwise writes the totals and scripts/run-stats.sh output between the report's
 # calibration-check markers (appended the first time), so the numbers come from code.
@@ -18,7 +18,7 @@ res=$(jq -Rn --rawfile b "$base" --rawfile r "$report" '
   [$b | split("\n")[] | capture("^\\s*- (?<id>B[0-9]+) ·").id] as $ids
   | [$r | split("\n")[] | select(test("^\\s*\\|\\s*B[0-9]+\\s*\\|")) | cells | {id: .[0], result: .[1], item: .[2], hid: (.[3] // "")}] as $rows
   | [$r | split("\n")[] | select(test("^\\s*\\|\\s*N[0-9]+\\s*\\|")) | cells | .[0]] as $noise
-  | ["cap", "budget", "ceiling", "filter", "omitted day", "unread page", "judgement", "not swept"] as $hiders
+  | ["cap", "budget", "ceiling", "filter", "omitted day", "unread page", "judgement", "not swept", "off-plan"] as $hiders
   | [ ($ids | group_by(.)[] | select(length > 1) | "baseline lists \(.[0]) more than once"),
       ($ids[] as $i | select([$rows[] | select(.id == $i)] | length == 0) | "no row for baseline item \($i)"),
       ($rows | group_by(.id)[] | select(length > 1) | "more than one row for \(.[0].id)"),

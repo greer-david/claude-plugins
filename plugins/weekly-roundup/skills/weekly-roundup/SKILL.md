@@ -23,7 +23,7 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 - `skip_projects`: transcript or clerk slugs to ignore inside those (substring match)
 - `jira`: `site`, `project` (a key, or a list of keys when the team's tickets span projects, e.g. mid-migration; new tickets go in the first), `user` (display name)
 - `week_start_day`: `sunday` by default
-- `gap_days`: if the previous log's window ended more than this many days ago (14), the run starts at this week's start instead
+- `gap_days`: if the previous run's window ended more than this many days ago (14), the run starts at this week's start instead
 - `reviewers`: the names used in wording rules
 - `caps`: `transcript_kb` (96), `clerk_kb` (60), `commits_per_repo` (100), enforced by `scripts/sweep-local.sh`; `findings_per_source` (40), a limit for the sweep subagents. `scripts/config-json` rejects invalid values.
 - `budgets`: maximum calls per M365 tool per run (e.g. `outlook_email_search: 12`, `read_resource: 40`, `default: 3`), and `total_kb` (1024): a ceiling on the KB of M365 and Atlassian results read per run (identity calls exempt); `max_window_days` (8). Enforced by `hooks/guard.sh`, which also denies searches outside the run's window.
@@ -33,7 +33,7 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 
 Run `scripts/start-run.sh` first, before any sweep. It records the run time and the window in code, once per run, and prints them as JSON (`run_at`, `week_start`, `window_start`, `window_end`, `reason`, and `gap` if any). Never compute or change these yourself.
 
-- Default: from where the previous log's window ended to now, so every moment is swept exactly once. With no previous log, or one more than `gap_days` (14) old, it starts at this week's start, and the uncovered span (`gap`) goes under Gaps.
+- Default: from where the previous real run's window ended to now, so every moment is swept exactly once. A run counts once its log passes `scripts/check-log.sh`, which records its window in code; editing a log doesn't change it. With no previous run, or one more than `gap_days` (14) old, it starts at this week's start, and the uncovered span (`gap`) goes under Gaps.
 - An argument `YYYY-MM-DD` runs `start-run.sh --week YYYY-MM-DD` (that whole week). `--since DATE-OR-ISO` passes through to `start-run.sh --since`. `--dry-run` passes through as `start-run.sh --dry-run` (with either); a dry run's log never counts as the previous run, so the next real run sweeps the same span again. `--calibrate` doesn't pass it: a calibration log covers its week.
 - The log is `<log_dir>/<week_start>.md`. Items dated before `week_start` are **late items**: put them in this log, marked late; never rewrite an older log. The local sweep marks them `[late]`; for Jira and M365 findings, compare the date yourself.
 - Read the previous log (if any) and bring forward its **carried items**: open **Pending verification** items and Jira proposals it left unposted.

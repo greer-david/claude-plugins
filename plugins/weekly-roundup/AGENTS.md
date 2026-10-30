@@ -14,9 +14,9 @@ Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and 
 - `scripts/config-json`: config plus defaults as JSON
 - `scripts/team-rules.sh`: prints the team rules after a `STATUS:` line (`ok`, `stale`, `missing`, `none`); with `team_rules` it fetches and reads `<ref>:<path>` from the clone, leaving the checkout alone
 - `scripts/tz.sh`: sourced by the scripts; `offset_at`, `midnights DATE...` (each day's local midnight, with that day's own UTC offset), `local_to_utc` (a zone-less time at its own offset) and `local_stamp` (docs/adr/0003)
-- `scripts/start-run.sh [--week D | --since X] [--dry-run]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it. Logs marked `dry_run: true` never count as the previous run
+- `scripts/start-run.sh [--week D | --since X] [--dry-run]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it. The previous run is read from `covered.jsonl` (from log frontmatter only before the first checkpoint, so editing a log can't skip a span); dry runs are never recorded
 - `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
-- `scripts/check-log.sh LOG`: fails if the log's window frontmatter or dry_run differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To
+- `scripts/check-log.sh LOG`: fails if the log's window frontmatter or dry_run differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To; on ok, records a real run's window in `~/.local/state/weekly-roundup/covered.jsonl`
 - `scripts/calibration-check.sh REPORT BASELINE`: `--calibrate` coverage check (every baseline item has a row with an allowed result and cause) that writes the totals and run-stats into the report
 - `scripts/run-stats.sh [RUN]`: M365 call table, errors, unread pages and omitted days (window days no successful email or chat search covered) from the call record
 - `tests/guard-test.sh`: guard self-test (classification, fail-closed, dates, parallel budgets)

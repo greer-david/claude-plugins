@@ -101,4 +101,26 @@ grep -q "no source tag" <<<"$(pm '- [ ] Ed · Oct 27 · ask (email)')" && ok "ch
 grep -q "without a message id" <<<"$(pm '- [ ] Fa · Oct 27 · ask · email')" && ok "check-log: email without id fails" || bad "check-log: email without id"
 echo "{\"log_dir\":\"$tmp/logs\",\"rules_file\":\"/tmp/r.md\"}" >"$tmp/c.json"; opened CCC me@example.com
 grep -q "set m365.my_addresses" <<<"$(pm '- [ ] Gi · Oct 27 · ask · email CCC')" && ok "check-log: no my_addresses fails loudly" || bad "check-log: no my_addresses"
+# Covered checkpoint: check-log records a real run's window once its log passes; start-run reads that,
+# not log frontmatter, which anyone can edit.
+cov="$tmp/.local/state/weekly-roundup/covered.jsonl"
+rm -f "$tmp/logs/"* "$cov"
+runlog() { jq -r '"week_start: \(.week_start)\nrun_at: \(.run_at)\nwindow_start: \(.window_start)\nwindow_end: \(.window_end)\n" + (if .dry_run then "dry_run: true\n" else "" end)' \
+  "$tmp/.local/state/weekly-roundup/$1/window.json"; }
+covlines() { [ -f "$cov" ] && wc -l <"$cov" | tr -d ' ' || echo 0; }
+win k >/dev/null; log 2026-10-25.md "$(runlog k)"$'\n'
+WEEKLY_ROUNDUP_RUN=k bash scripts/check-log.sh "$tmp/logs/2026-10-25.md" >/dev/null
+[ "$(covlines)" = 1 ] && [ "$(jq -r '"\(.run) \(.window_end)"' "$cov")" = "k 2026-10-30T14:00:00Z" ] && ok "checkpoint: passing real run recorded" || bad "checkpoint: recorded" "$(cat "$cov" 2>&1)"
+WEEKLY_ROUNDUP_RUN=k bash scripts/check-log.sh "$tmp/logs/2026-10-25.md" >/dev/null
+[ "$(covlines)" = 1 ] && ok "checkpoint: rechecking a run doesn't duplicate it" || bad "checkpoint: duplicate" "$(cat "$cov")"
+N=2026-10-31T09:00:00Z win kd --dry-run >/dev/null; log dry.md "$(runlog kd)"$'\n'
+WEEKLY_ROUNDUP_RUN=kd bash scripts/check-log.sh "$tmp/logs/dry.md" >/dev/null && [ "$(covlines)" = 1 ] && ok "checkpoint: dry run not recorded" || bad "checkpoint: dry run" "$(cat "$cov")"
+N=2026-10-31T09:30:00Z win kf >/dev/null; log bad.md $'week_start: 2026-10-25\n'
+WEEKLY_ROUNDUP_RUN=kf bash scripts/check-log.sh "$tmp/logs/bad.md" >/dev/null; [ "$(covlines)" = 1 ] && ok "checkpoint: failing log not recorded" || bad "checkpoint: failing log" "$(cat "$cov")"
+# Tamper: move the real log's window_end forward and strip dry_run from the dry log.
+log 2026-10-25.md "$(runlog k | sed 's/^window_end: .*/window_end: 2026-10-31T08:00:00Z/')"$'\n'
+log dry.md "$(runlog kd | grep -v dry_run)"$'\n'
+want "checkpoint: edited logs don't move the next window" "$(N=2026-10-31T10:00:00Z win k2)" "2026-10-30T14:00:00Z 2026-10-31T10:00:00Z 2026-10-25"
+echo 'not json' >>"$cov"
+WEEKLY_ROUNDUP_RUN=k3 WEEKLY_ROUNDUP_NOW=2026-10-31T11:00:00Z bash scripts/start-run.sh >/dev/null 2>&1 && bad "checkpoint: unreadable file fails closed" || ok "checkpoint: unreadable file fails closed"
 exit $fail

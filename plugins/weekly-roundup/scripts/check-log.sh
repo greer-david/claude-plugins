@@ -4,6 +4,8 @@
 # Checks: run_at, week_start, the window and dry_run match the run; every "Possibly fell through the cracks"
 # bullet ends with a source tag (email <message id> | teams | github | jira | calendar | other), and
 # every email one names a message this run opened (read_resource) with the user in To (hooks/record.sh).
+# On ok, a real run's window goes into ~/.local/state/weekly-roundup/covered.jsonl (one line per run),
+# which start-run.sh reads to find where the next run starts.
 set -u
 log=${1:?usage: check-log.sh LOG}
 win="$HOME/.local/state/weekly-roundup/${WEEKLY_ROUNDUP_RUN:-}/window.json"
@@ -35,4 +37,10 @@ missed=$(jq -Rrs --argjson reads "${reads:-[]}" '
             elif $r.addressed != "to_me" then "the user isn'"'"'t in To on email \($id), so it isn'"'"'t possibly missed (context at most): \($b)"
             else empty end end end' "$log")
 [ -z "$missed" ] || { echo "check-log: possibly-missed items in $log fail the rules:"; echo "$missed"; exit 1; }
+if [ "$(jq -r '.dry_run // false' "$win")" != true ]; then
+  cov="$HOME/.local/state/weekly-roundup/covered.jsonl"
+  { [ ! -f "$cov" ] || jq -c --arg r "$WEEKLY_ROUNDUP_RUN" 'select(.run != $r)' "$cov"
+    jq -c --arg r "$WEEKLY_ROUNDUP_RUN" --arg log "$log" '{run: $r, log: $log, run_at, week_start, window_start, window_end}' "$win"
+  } >"$cov.tmp" && mv "$cov.tmp" "$cov" || { rm -f "$cov.tmp"; echo "check-log: can't record this run's window in $cov" >&2; exit 1; }
+fi
 echo "check-log: ok"

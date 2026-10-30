@@ -43,7 +43,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
    claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v1/mcp
    ```
 
-   Keep `atlassian` (or `jira`, `confluence`, `rovo`) in the server's name: the safety hook recognises Jira tools by that name. Your site is the `<name>.atlassian.net` part of your Jira URL. Your project is the key your team's tickets start with (`ABC` in `ABC-123`).
+   Keep `atlassian` (or `jira`, `confluence`, `rovo`) in the server's name: the safety hook recognises Jira tools by that name. Your site is the `<name>.atlassian.net` part of your Jira URL. Your project is the key your team's tickets start with (`ABC` in `ABC-123`). If they're split across projects (say, mid-migration), list them: `"project": ["NEW", "OLD"]`. New tickets go in the first.
 
 3. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `session_dirs` lists the folders whose Claude Code sessions are swept (default: your `repos`); see Privacy. Put your email addresses (aliases too) in `m365.my_addresses`: an email only counts as possibly missed when you're in its To line. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
 

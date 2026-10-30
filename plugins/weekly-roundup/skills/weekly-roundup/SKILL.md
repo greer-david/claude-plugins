@@ -10,10 +10,10 @@ One run per week, Friday morning by default. The output is one markdown log. Jir
 
 ## 0. Load config
 
-Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roundup/config.json` with defaults merged in. If it fails because the file is missing, copy `templates/config.example.json` there, ask the user to fill it in, and stop. Keys:
+Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roundup/config.json` with defaults merged in. If it fails because the file is missing, run the `weekly-roundup:setup` skill instead, and stop. Keys:
 
 - `log_dir`: where weekly logs go (one file per week, named by the week's start date)
-- `team_rules_file`: shared team rules, kept in a team repo and changed by PR (optional)
+- `team_rules`: shared team rules, kept in a team repo and changed by PR (optional). `{repo, ref, path}`: the file at `path` on `ref` (default `origin/HEAD`) in the local clone at `repo`, read without touching the checkout. Or `team_rules_file`: a plain path. Not both.
 - `rules_file`: the user's personal rules (the template is `templates/rules.md`)
 - `log_template`: optional override for `templates/week.md`
 - `repos`: local repo paths; `github_repos`: `owner/name` for `gh`; `github_user`: the `gh` account to read with (its token is used without switching the active account)
@@ -23,7 +23,7 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 - `skip_projects`: transcript or clerk slugs to ignore inside those (substring match)
 - `jira`: `site`, `project` (a key, or a list of keys when the team's tickets span projects, e.g. mid-migration; new tickets go in the first), `user` (display name)
 - `week_start_day`: `sunday` by default
-- `gap_days`: if the previous log's window ended more than this many days ago (14), the run starts at this week's start instead
+- `gap_days`: if the previous run's window ended more than this many days ago (14), the run starts at this week's start instead
 - `reviewers`: the names used in wording rules
 - `caps`: `transcript_kb` (96), `clerk_kb` (60), `commits_per_repo` (100), enforced by `scripts/sweep-local.sh`; `findings_per_source` (40), a limit for the sweep subagents. `scripts/config-json` rejects invalid values.
 - `budgets`: maximum calls per M365 tool per run (e.g. `outlook_email_search: 12`, `read_resource: 40`, `default: 3`), and `total_kb` (1024): a ceiling on the KB of M365 and Atlassian results read per run (identity calls exempt); `max_window_days` (8). Enforced by `hooks/guard.sh`, which also denies searches outside the run's window.
@@ -33,7 +33,7 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 
 Run `scripts/start-run.sh` first, before any sweep. It records the run time and the window in code, once per run, and prints them as JSON (`run_at`, `week_start`, `window_start`, `window_end`, `reason`, and `gap` if any). Never compute or change these yourself.
 
-- Default: from where the previous log's window ended to now, so every moment is swept exactly once. With no previous log, or one more than `gap_days` (14) old, it starts at this week's start, and the uncovered span (`gap`) goes under Gaps.
+- Default: from where the previous real run's window ended to now, so every moment is swept exactly once. A run counts once its log passes `scripts/check-log.sh`, which records its window in code; editing a log doesn't change it. With no previous run, or one more than `gap_days` (14) old, it starts at this week's start, and the uncovered span (`gap`) goes under Gaps.
 - An argument `YYYY-MM-DD` runs `start-run.sh --week YYYY-MM-DD` (that whole week). `--since DATE-OR-ISO` passes through to `start-run.sh --since`. `--dry-run` passes through as `start-run.sh --dry-run` (with either); a dry run's log never counts as the previous run, so the next real run sweeps the same span again. `--calibrate` doesn't pass it: a calibration log covers its week.
 - The log is `<log_dir>/<week_start>.md`. Items dated before `week_start` are **late items**: put them in this log, marked late; never rewrite an older log. The local sweep marks them `[late]`; for Jira and M365 findings, compare the date yourself.
 - Read the previous log (if any) and bring forward its **carried items**: open **Pending verification** items and Jira proposals it left unposted.
@@ -41,7 +41,7 @@ Run `scripts/start-run.sh` first, before any sweep. It records the run time and 
 
 ## 2. Load rules
 
-Read `team_rules_file` (if set), then `rules_file`, completely. Every proposal below must follow both. When they conflict, the personal rule wins. Note the conflict under Gaps so the user can raise it with the team. If `team_rules_file` is set but missing, say so and continue with personal rules only. It usually means the team repo isn't pulled or the path is wrong. Keep a list of the rule IDs you actually used; it goes into the log under `Rules applied`.
+Run `scripts/team-rules.sh` and read its output, then `rules_file`, completely. Every proposal below must follow both. When they conflict, the personal rule wins. Note the conflict under Gaps so the user can raise it with the team. The output starts with a `STATUS:` line. On `stale` (the fetch failed, so these are the last fetched rules) or `missing`, put the status line under Gaps and continue (with personal rules only, if missing). Keep a list of the rule IDs you actually used; it goes into the log under `Rules applied`.
 
 ## 3. Sweep sources
 
@@ -68,6 +68,7 @@ This step and step 5 run in the main session, which only ever sees the findings 
 - Group the findings by theme (one theme per model, epic or workstream).
 - Classify after-hours and weekend items with the classification rules. Ambiguous items go into the review as questions, never guesses.
 - Drop small items according to the scope rules.
+- Before an item goes under Possibly missed, check it against the user's own work after the ask's date: the local findings (commits, PRs, sessions) and the other M365 findings (a reply in another channel, a meeting where it was settled). If the findings don't settle it, send the local subagent back with the ask and its date, and have it check whether a later session, commit or PR acted on it. If the user acted on it, it's work done: put it in its theme with the evidence, not under Possibly missed. If the evidence is partial, keep the item and say what was found. Answers given in person or by phone stay invisible; the user clears those in review.
 - **Possibly missed** findings go into their own log section and never become Jira rows directly. The user decides what to do with them. Each bullet ends with its source tag: `· email <message id>`, `· teams <link>`, `· github <url>`, `· jira <key>`, `· calendar` or `· other`.
 
 ## 5. Write the log
@@ -89,7 +90,7 @@ The quote is exactly what gets posted. Don't put anything in a post that the pro
 
 ## 6. Review and approval
 
-Show the user the path and the leadership summary, then ask for approvals in the form `post 1-6, 9`.
+Show the user the path and the leadership summary, then every proposal: its number, ticket (key, summary and link `https://<jira.site>/browse/<KEY>`; for a new ticket, its project and proposed summary), group, and the exact text it posts as a quote block, copied from the log. Only then ask for approvals in the form `post 1-6, 9`. The user approves what they've read, so never summarise or shorten a post's text here. If the user edits a proposal, show it again in full.
 
 - Post only the proposals named, with exactly the text the log shows. In a roundup run the guard enforces this: each `post` message (exactly `post <numbers>`, nothing else) approves one write per named proposal, and any write that doesn't match one is denied. Status changes, new tickets and links must be named singly (`post 12`); a range skips them. Each approved write still shows the user a permission prompt.
 - If the user edits a proposal's text, they approve it again with `post N` after the edit; the earlier approval no longer counts.
@@ -99,7 +100,7 @@ Show the user the path and the leadership summary, then ask for approvals in the
 
 ## 7. Learning step
 
-Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets, and "you missed X". For a miss, check the sweep stats: if a cap or budget was hit, or the item's sender or chat is in the Dropped table or a Judgement drops list, propose a **config change** (`budgets`, `caps`, `m365.noise_senders`, `m365.mute_chats`) instead of a rule. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them only after the user approves them. Never change rules silently. `[personal]` rules go into `rules_file`. `[team]` rules are **never edited in place**: write the approved change as a ready-to-apply diff of `team_rules_file` in the log under Rule changes proposed, and tell the user to open a PR in the team repo.
+Look at what the user corrected: edited text, rejected rows, reclassified items, wrong tickets, and "you missed X". For a miss, check the sweep stats: if a cap or budget was hit, or the item's sender or chat is in the Dropped table or a Judgement drops list, propose a **config change** (`budgets`, `caps`, `m365.noise_senders`, `m365.mute_chats`) instead of a rule. Propose rule changes under **Rule changes proposed** using the rules-file format (`ID [team|personal] rule`), each naming the rule it replaces or merges with, or saying `new`. Write them only after the user approves them. Never change rules silently. `[personal]` rules go into `rules_file`. `[team]` rules are **never edited in place**: write the approved change as a ready-to-apply diff of the team rules file (against the text `scripts/team-rules.sh` printed, at its `path` in the team repo) in the log under Rule changes proposed, and tell the user to open a PR in the team repo.
 
 ## Calibration
 

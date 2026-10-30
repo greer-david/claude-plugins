@@ -21,7 +21,8 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
 ## Requirements
 
-- macOS, Linux or WSL with `bash`, `jq`, `git` and `gh` (signed in to the GitHub account that sees your work repos)
+- macOS, Linux or WSL with `bash`, `jq`, `git` and `gh` (signed in to the GitHub account that sees your work repos). Install `jq` before the plugin: without it, the safety hook blocks Jira and Microsoft 365 in every session. On Windows: `winget install jqlang.jq GitHub.cli`.
+- **Windows (Git Bash) is not tested yet.** Try a dry run before relying on it.
 - The Atlassian MCP server in Claude Code, for Jira (setup step 2)
 - For Microsoft 365: the claude.ai **Microsoft 365** connector, connected at claude.ai → Settings → Connectors
 - Optional: [clerk](https://github.com/vulcanshen/clerk) for session summaries
@@ -37,7 +38,13 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Choose **user** scope.
 
-2. **Jira.** Add Atlassian's MCP server at user scope and sign in when it asks:
+2. **Set up.** In a new Claude Code session, run `/weekly-roundup:setup` (or ask Claude to "set up weekly-roundup"). If your team has a team config, name it: `/weekly-roundup:setup ~/repos/team-repo/docs/weekly-roundup/team-config.json`. Setup checks the requirements, works out what it can, asks for the rest, shows each file change before making it, and runs the tests. Then go to First run.
+
+### Manual setup
+
+What the setup skill does, if you'd rather do it yourself.
+
+1. **Jira.** Add Atlassian's MCP server at user scope and sign in when it asks:
 
    ```
    claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v1/mcp
@@ -45,13 +52,13 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Keep `atlassian` (or `jira`, `confluence`, `rovo`) in the server's name: the safety hook recognises Jira tools by that name. Your site is the `<name>.atlassian.net` part of your Jira URL. Your project is the key your team's tickets start with (`ABC` in `ABC-123`). If they're split across projects (say, mid-migration), list them: `"project": ["NEW", "OLD"]`. New tickets go in the first.
 
-3. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `session_dirs` lists the folders whose Claude Code sessions are swept (default: your `repos`); see Privacy. Put your email addresses (aliases too) in `m365.my_addresses`: an email only counts as possibly missed when you're in its To line. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`. `/weekly-roundup` will offer to do this on first run.
+2. **Config.** Copy `skills/weekly-roundup/templates/config.example.json` to `~/.config/weekly-roundup/config.json` and fill it in: log folder, repos, Jira project, and your team's rules file. `session_dirs` lists the folders whose Claude Code sessions are swept (default: your `repos`); see Privacy. Put your email addresses (aliases too) in `m365.my_addresses`: an email only counts as possibly missed when you're in its To line. `m365.mute_chats` takes Teams chat IDs (like `19:abc@thread.v2`), not chat names: in Teams, use **Copy link** on any message in the chat; the ID is the part of the link that starts with `19:`.
 
-4. **Rules.**
-   - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`) and change by PR. Point `team_rules_file` at your local clone. If your team doesn't have the file yet, add one from `templates/team-rules.md` by PR, or leave `team_rules_file` out until it's merged; a path that doesn't exist is reported in every log.
+3. **Rules.**
+   - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`) and change by PR. Set `team_rules` to your clone, the branch the rules are merged to, and the file: `{"repo": "~/repos/team-repo", "ref": "origin/main", "path": "docs/weekly-roundup/team-rules.md"}`. Each run fetches and reads that branch's copy, whatever you have checked out, so you never need to pull. If the fetch fails, the run uses the last fetched copy and says so in the log. If your team doesn't have the file yet, add one from `templates/team-rules.md` by PR, or leave `team_rules` out until it's merged.
    - **Personal rules:** copy `templates/rules.md` to wherever `rules_file` points. It starts empty and grows from your corrections.
 
-5. **Microsoft 365 only in roundup sessions (recommended).** Keep claude.ai connectors out of your everyday sessions and turn them on just for roundups. Add to `~/.zshrc` (or `~/.bashrc`):
+4. **Microsoft 365 only in roundup sessions (recommended).** Keep claude.ai connectors out of your everyday sessions and turn them on just for roundups. Add to `~/.zshrc` (or `~/.bashrc`):
 
    ```
    export ENABLE_CLAUDEAI_MCP_SERVERS=false
@@ -61,7 +68,11 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
    Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
-6. **Check the hook works:** from the installed plugin folder, run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, window). Every line should say `ok`. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
+5. **Check the hook works:** from the installed plugin folder, run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, team-rules, window). Every line should say `ok`. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
+
+### For teams
+
+Put a `team-config.json` in your team repo, next to the team rules. It's a partial `config.json` with only the values everyone shares: `jira` site and project, `github_repos`, `m365.noise_senders` and `m365.alert_patterns`, and `team_rules` without `repo` (setup fills in each person's clone). Teammates then run `/weekly-roundup:setup <path to it>`. Personal values (name, addresses, repos, log folder) never go in it.
 
 ## First run
 
@@ -73,7 +84,7 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
 - **Friday morning:** open a new terminal tab in your notes folder and type `roundup`. Review the log, then approve proposals with a message that is just `post 1-6, 9`. Status changes, new tickets and links must be named one by one (`post 12`). Only what you approved, with exactly the text in the log, can be posted, and Claude Code still asks before each post. If you edit a proposal, approve it again.
 - **A different week:** run `roundup-session`, then `/weekly-roundup 2026-10-18`.
-- **What each run covers:** from where your last log left off until now, so nothing is swept twice or skipped. Anything that happened before this week (say, Friday afternoon after last week's run) goes in this week's log, marked late. If your last run was over two weeks ago, the run starts at this week's start and tells you what it didn't cover; `/weekly-roundup --since 2026-10-01` covers more.
+- **What each run covers:** from where your last run left off until now, so nothing is swept twice or skipped. Anything that happened before this week (say, Friday afternoon after last week's run) goes in this week's log, marked late. If your last run was over two weeks ago, the run starts at this week's start and tells you what it didn't cover; `/weekly-roundup --since 2026-10-01` covers more.
 - **Dry run:** `/weekly-roundup --dry-run` writes the log and stops before approval. The next run sweeps that span again.
 - **Tuning:** `/weekly-roundup <week> --calibrate <manual-log>` compares a run with a roundup you did by hand and proposes config changes.
 

@@ -1,0 +1,4 @@
+# Scripts must keep LF on Windows too (Git for Windows checks out CRLF by default, which breaks bash).
+*.sh text eol=lf
+plugins/*/scripts/* text eol=lf
+plugins/*/hooks/* text eol=lf

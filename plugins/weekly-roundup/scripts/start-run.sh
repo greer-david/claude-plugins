@@ -2,7 +2,8 @@
 # Fix a roundup run's window, once. Usage: start-run.sh [--week YYYY-MM-DD | --since DATE-OR-ISO]
 # The first call in a run records run_at (now, UTC) and the window in
 # ~/.local/state/weekly-roundup/$WEEKLY_ROUNDUP_RUN/window.json; later calls print the saved one.
-#   default:  previous log's run_at -> now. No previous log, or one older than gap_days: this week's start.
+#   default:  where the previous real run ended (covered.jsonl, written by check-log.sh; before the first one, the logs'
+#             frontmatter) -> now. None, or one older than gap_days: this week's start.
 #   --since:  that date (local midnight) or ISO instant -> now.
 #   --week:   the whole week containing that date (backfill, calibration); ends now if the week isn't over.
 #   --dry-run: records dry_run: true; logs with dry_run: true never count as the previous run.
@@ -34,13 +35,21 @@ fi
 cfg=$("$here/config-json") || { echo "start-run: config failed to load." >&2; exit 1; }
 log_dir=$(jq -r '.log_dir' <<<"$cfg")
 
-# Where each existing weekly log's window ended: frontmatter window_end, or for older logs the
+# Where earlier runs ended. covered.jsonl is written only by check-log.sh, for real runs whose log
+# passed, so editing a log can't change it; an unreadable file fails closed.
+cov="$HOME/.local/state/weekly-roundup/covered.jsonl"
+if [ -f "$cov" ]; then
+  logs=$(jq -s 'map({run_at, window_end, file: "covered.jsonl run \(.run)"})' "$cov") \
+    || { echo "start-run: can't read $cov; fix or remove the bad line." >&2; exit 1; }
+else
+# Before the first checkpoint, from the logs: frontmatter window_end, or for older logs the
 # earlier of run_at and the end of week_end (a backfill or calibration run is stamped after its week).
 logs=$(for f in "$log_dir"/*.md; do
   [ -f "$f" ] || continue
   awk 'NR==1 && !/^---/{exit} NR>1 && /^---/{exit} /^(run_at|window_end|week_end|dry_run):/{k=$1; sub(":","",k); v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["\047]/,"",v); print k "\t" v}' "$f" |
     jq -Rn --arg f "$(basename "$f")" '[inputs | split("\t") | {(.[0]): .[1]}] | add + {file: $f}'
 done 2>/dev/null | jq -s 'map(select((.run_at or .window_end) and .dry_run != "true"))')
+fi
 now=${WEEKLY_ROUNDUP_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 # Local midnight of every day the window rules can touch: around now and the argument (a week either
 # side), and around each previous log's dates.

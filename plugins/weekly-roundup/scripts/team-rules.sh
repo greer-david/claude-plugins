@@ -21,6 +21,9 @@ repo=$(jq -r .team_rules.repo <<<"$cfg"); ref=$(jq -r .team_rules.ref <<<"$cfg")
 src="$ref:$path in $repo"
 git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || { echo "STATUS: missing $src (not a git repo)"; exit 0; }
 status=ok note=
+# Fetch as github_user (gh's git credential helper reads GH_TOKEN), like sweep-local.sh, not the active account.
+gh_user=$(jq -r '.github_user // empty' <<<"$cfg")
+if [ -n "$gh_user" ]; then GH_TOKEN=$(gh auth token --user "$gh_user" 2>/dev/null) && export GH_TOKEN; fi
 remote=${ref%%/*}
 if git -C "$repo" remote | grep -qx -- "$remote"; then
   err=$(GIT_TERMINAL_PROMPT=0 git -C "$repo" fetch --quiet "$remote" 2>&1) \

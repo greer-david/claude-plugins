@@ -58,6 +58,14 @@ grep -q '^STATUS: missing ' <<<"$out" && ok "team_rules_file missing reported" |
 cfg ''; out=$(tr_)
 grep -q '^STATUS: none' <<<"$out" && ok "no team rules configured" || bad "none"
 
+# With github_user, the fetch uses that account's gh token (GH_TOKEN for gh's credential helper),
+# not whichever account is active.
+mkdir -p "$tmp/bin"; printf '#!/bin/bash\n[ "$*" = "auth token --user u1" ] && echo tok-u1\n' >"$tmp/bin/gh"; chmod +x "$tmp/bin/gh"
+printf '#!/bin/bash\n[ "$1 $2" = "-C %s" ] && [ "$3" = fetch ] && echo "${GH_TOKEN:-none}" >"%s/seen"\nexec %s "$@"\n' "$tmp/clone" "$tmp" "$(command -v git)" >"$tmp/bin/git"; chmod +x "$tmp/bin/git"
+cfg ',"github_user":"u1","team_rules":{"repo":"'"$tmp"'/clone","ref":"origin/dev","path":"docs/rules.md"}'
+PATH="$tmp/bin:$PATH" bash scripts/team-rules.sh >/dev/null 2>&1
+out=$(cat "$tmp/seen" 2>&1); [ "$out" = tok-u1 ] && ok "fetch uses github_user's token" || bad "github_user token"
+
 # Config validation.
 cfg ',"team_rules_file":"/x","team_rules":{"repo":"/r","path":"p"}'
 out=$(bash scripts/config-json 2>&1) && bad "both keys rejected" || ok "both keys rejected"

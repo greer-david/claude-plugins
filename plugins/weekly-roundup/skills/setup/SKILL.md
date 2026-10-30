@@ -19,6 +19,8 @@ Check each and show a table: requirement, ok / missing, and the fix.
 - **Microsoft 365:** `mcp__claude_ai_Microsoft_365__*` tools loaded. If they aren't, the connector is either not connected (claude.ai → Settings → Connectors) or turned off for this session (`ENABLE_CLAUDEAI_MCP_SERVERS=false`, which step 5 sets up on purpose). Roundups run without it and list it under Gaps.
 - **clerk** (optional): `command -v clerk`.
 
+Some fixes only the user can do: installs, `gh auth login`, signing in to Atlassian, connecting Microsoft 365 at claude.ai. If the `mattpocock-skills:wizard` skill is available, offer to build a wizard that walks them through those; otherwise give them as numbered steps.
+
 Done when every row is ok, or missing with its fix shown.
 
 ## 2. Read the team config

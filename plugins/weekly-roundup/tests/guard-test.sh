@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for hooks/guard.sh. Run: tests/guard-test.sh   (exit 0 = all passed)
 cd "$(dirname "$0")/.." || exit 1
+unset WEEKLY_ROUNDUP_RUN  # a roundup-session shell sets it; the cases below set it where they need a run
 g=hooks/guard.sh; M=mcp__claude_ai_Microsoft_365__; A=mcp__atlassian__; fail=0
 tmp=$(mktemp -d); trap 'chmod -R u+w "$tmp" 2>/dev/null; rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home"

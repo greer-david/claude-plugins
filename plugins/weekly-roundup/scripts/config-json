@@ -26,6 +26,8 @@ jq -e --arg home "$HOME" '
   | .log_dir |= tilde | .rules_file |= tilde | .team_rules_file |= tilde
   | .clerk_dir |= tilde | .transcripts_dir |= tilde | .log_template |= tilde
   | .repos |= map(tilde)
+  # Team rules are read from a git ref in a clone of the team repo; ref defaults to origin/HEAD (the default branch).
+  | if (.team_rules | type) == "object" then .team_rules |= (.ref //= "origin/HEAD" | .repo |= tilde) else . end
   # Sessions are swept only from projects inside session_dirs; by default, the configured repos.
   | .session_dirs = ((.session_dirs // .repos) | if type == "array" then map(tilde) else . end)
   | with_entries(select(.value != null))
@@ -35,6 +37,10 @@ jq -e --arg home "$HOME" '
     [ (if (.log_dir | type) != "string" then "log_dir must be a path" else empty end),
       (if (.rules_file | type) != "string" then "rules_file must be a path" else empty end),
       (if (.team_rules_file // "" | type) != "string" then "team_rules_file must be a path" else empty end),
+      (if .team_rules == null then empty
+       elif .team_rules_file != null then "set team_rules or team_rules_file, not both"
+       elif (.team_rules | type) != "object" or ([.team_rules.repo, .team_rules.ref, .team_rules.path] | all(type == "string") | not)
+       then "team_rules needs repo and path (and optionally ref) as strings" else empty end),
       (if (.week_start_day | IN("sunday","monday","tuesday","wednesday","thursday","friday","saturday")) | not then "week_start_day must be a weekday name" else empty end),
       (if (.max_window_days | int_in(1; 31)) | not then "max_window_days must be a whole number from 1 to 31" else empty end),
       (if (.gap_days | int_in(1; 366)) | not then "gap_days must be a whole number from 1 to 366" else empty end),

@@ -1,7 +1,7 @@
 {
   "log_dir": "~/notes/Work/Weekly",
   "rules_file": "~/notes/roundup-rules.md",
-  "team_rules_file": "~/repos/your-team-repo/docs/weekly-roundup/team-rules.md",
+  "team_rules": { "repo": "~/repos/your-team-repo", "ref": "origin/main", "path": "docs/weekly-roundup/team-rules.md" },
   "week_start_day": "sunday",
   "repos": ["~/repos/your-main-repo"],
   "github_repos": ["your-org/your-main-repo"],

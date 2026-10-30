@@ -1,16 +1,18 @@
 # weekly-roundup (developer notes)
 
-One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, and proposes Jira updates that the user approves row by row. User-facing setup is in `README.md`.
+Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and proposes Jira updates that the user approves row by row. `/weekly-roundup:setup` writes a user's config (merging a team config), rules file and aliases. User-facing setup is in `README.md`.
 
 ## Layout
 
 - `skills/weekly-roundup/SKILL.md`: the workflow
 - `skills/weekly-roundup/templates/`: `config.example.json`, `rules.md` (personal rules starter), `team-rules.md` (team rules starter), `week.md` (log template)
+- `skills/setup/SKILL.md`: the setup workflow
 - `hooks/guard.sh`: PreToolUse on `mcp__.*`, the deterministic hard rules
 - `hooks/approve.sh`: UserPromptSubmit; in a run, turns a prompt that is exactly `post <numbers>` into approvals (the exact Jira write each named proposal shows) in the run's `approvals.jsonl`
 - `hooks/lib.sh`: sourced by the hooks; `classify` (tool name to m365/atlassian and tool key, one rule for guard and recorder) and `take_lock` (the run lock: an `ln -s` symlink naming its holder; a dead holder's lock is reclaimed under a second lock and only if unchanged)
 - `hooks/record.sh`: PostToolUse on MCP tools; for M365 and Atlassian, the call record for roundup runs (result bytes feed the guard's `budgets.total_kb` ceiling), and the noise filter (`noise_senders`, `alert_patterns`, `mute_chats` by chat ID) that rewrites email and chat search results via `updatedMCPToolOutput` and records Dropped counts
 - `scripts/config-json`: config plus defaults as JSON
+- `scripts/team-rules.sh`: prints the team rules after a `STATUS:` line (`ok`, `stale`, `missing`, `none`); with `team_rules` it fetches and reads `<ref>:<path>` from the clone, leaving the checkout alone
 - `scripts/tz.sh`: sourced by the scripts; `offset_at`, `midnights DATE...` (each day's local midnight, with that day's own UTC offset), `local_to_utc` (a zone-less time at its own offset) and `local_stamp` (docs/adr/0003)
 - `scripts/start-run.sh [--week D | --since X] [--dry-run]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it. Logs marked `dry_run: true` never count as the previous run
 - `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
@@ -25,6 +27,7 @@ One skill, `/weekly-roundup`. It sweeps a week of work, writes a markdown log, a
 - `tests/window-test.sh`: start-run window rules + check-log self-test
 - `tests/linux.sh`: runs every test in a Debian container (docker), as a non-root user
 - `tests/approval-test.sh`: approve.sh + guard approval binding self-test
+- `tests/team-rules-test.sh`: team-rules.sh (ref read, fetch, stale fallback, missing) + team_rules config validation
 
 ## Invariants
 

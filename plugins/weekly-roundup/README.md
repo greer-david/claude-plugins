@@ -21,7 +21,8 @@ In roundup sessions it also limits how many Microsoft 365 calls each tool can ma
 
 ## Requirements
 
-- macOS, Linux or WSL with `bash`, `jq`, `git` and `gh` (signed in to the GitHub account that sees your work repos)
+- macOS, Linux or WSL with `bash`, `jq`, `git` and `gh` (signed in to the GitHub account that sees your work repos). Install `jq` before the plugin: without it, the safety hook blocks Jira and Microsoft 365 in every session. On Windows: `winget install jqlang.jq GitHub.cli`.
+- **Windows (Git Bash) is not tested yet.** Try a dry run before relying on it.
 - The Atlassian MCP server in Claude Code, for Jira (setup step 2)
 - For Microsoft 365: the claude.ai **Microsoft 365** connector, connected at claude.ai → Settings → Connectors
 - Optional: [clerk](https://github.com/vulcanshen/clerk) for session summaries

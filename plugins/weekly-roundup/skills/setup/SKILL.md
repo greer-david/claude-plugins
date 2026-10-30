@@ -10,9 +10,11 @@ Paths are relative to the plugin root, two folders up from this file. Every writ
 
 ## 1. Check requirements
 
+Start from a stock machine: assume only Claude Code and what it needs (Git for Windows on Windows), and check everything else. Find the OS first (`uname -s`; `MINGW*` or `MSYS*` is Windows) and give fixes for that OS: `winget install jqlang.jq GitHub.cli` on Windows (then restart the terminal and Claude Code so PATH picks them up), `brew install jq gh` on macOS, the package manager on Linux. On Windows, say the plugin hasn't been tested there yet (README.md, Requirements).
+
 Check each and show a table: requirement, ok / missing, and the fix.
 
-- `jq`, `git`, `gh` on PATH, and `gh auth status` signed in. These three block setup: if one is missing, show the fix and stop.
+- `jq`, `git`, `gh` on PATH, and `gh auth status` signed in. These three block setup: if one is missing, show the fix and stop. Until `jq` is installed, the plugin's guard blocks every Jira and Microsoft 365 call in every session, so fix it first.
 - **Atlassian MCP:** a loaded tool from a server whose name contains `atlassian`, `jira`, `confluence` or `rovo` (the guard recognises Jira by that name). Fix: `claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v1/mcp`, then sign in. Offer to run it.
 - **Microsoft 365:** `mcp__claude_ai_Microsoft_365__*` tools loaded. If they aren't, the connector is either not connected (claude.ai → Settings → Connectors) or turned off for this session (`ENABLE_CLAUDEAI_MCP_SERVERS=false`, which step 5 sets up on purpose). Roundups run without it and list it under Gaps.
 - **clerk** (optional): `command -v clerk`.
@@ -48,7 +50,7 @@ Build the config: team values, then personal values on top. Show the full JSON. 
 
 - Copy `skills/weekly-roundup/templates/rules.md` to `rules_file` if that file doesn't exist yet.
 - Run `scripts/team-rules.sh`. The first line must be `STATUS: ok` (or `STATUS: none` with no team rules). On `missing` or `stale`, fix the path, ref or remote with the user and run it again.
-- Offer the shell lines from README.md "Microsoft 365 only in roundup sessions". Pick the rc file from `$SHELL`, skip lines already there, and append after the user agrees.
+- Offer the shell lines from README.md "Microsoft 365 only in roundup sessions". Pick the rc file from `$SHELL`, skip lines already there, and append after the user agrees. On Windows they go in Git Bash's `~/.bashrc`, and roundups start from Git Bash; tell the user this, since they may never have opened it.
 
 ## 6. Test and hand over
 

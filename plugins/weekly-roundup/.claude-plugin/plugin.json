@@ -1,7 +1,7 @@
 {
   "name": "weekly-roundup",
   "description": "Weekly work log + Jira update proposals from git, gh, Claude Code sessions (clerk) and Jira, with approval gates and a learning rules file.",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "author": { "name": "David Greer" },
   "license": "UNLICENSED",
   "keywords": ["jira", "weekly", "status", "roundup"]

@@ -82,7 +82,7 @@ grep -q -- "- outlook_email_search: 2026-10-25" <<<"$out" && grep -q -- "- chat_
 # A time without a zone is UTC, as in the guard, whatever the local zone.
 page od4 outlook_email_search '{"afterDateTime":"2026-10-25T00:00:00","beforeDateTime":"2026-10-29T00:00:00","query":"*"}' '[{"id":1}]'
 page od4 chat_message_search '{"afterDateTime":"2026-10-25T00:00:00","beforeDateTime":"2026-10-29T00:00:00"}' '[{"id":1}]'
-TZ=America/Chicago bash scripts/run-stats.sh od4 | grep -q "Omitted days" && { echo "FAIL zone-less time read as local"; TZ=America/Chicago bash scripts/run-stats.sh od4; fail=1; } || echo "ok   zone-less time is UTC"
+TZ=CST6CDT,M3.2.0,M11.1.0 bash scripts/run-stats.sh od4 | grep -q "Omitted days" && { echo "FAIL zone-less time read as local"; TZ=CST6CDT,M3.2.0,M11.1.0 bash scripts/run-stats.sh od4; fail=1; } || echo "ok   zone-less time is UTC"
 # Error text inside a structured result's fields is data, not an error.
 rec se "$(jq -nc --arg t "${M}outlook_email_search" '{tool_name:$t, tool_input:{}, tool_response:{items:[{subject:"500 error on prod"}]}}')"
 [ "$(jq -s '.[-1].error' "$HOME/.local/state/weekly-roundup/se/calls.jsonl")" = false ] && echo "ok   error words in a structured field aren't an error" || { echo "FAIL structured field read as error"; tail -1 "$HOME/.local/state/weekly-roundup/se/calls.jsonl"; fail=1; }
@@ -96,17 +96,13 @@ TZ=UTC bash scripts/run-stats.sh od5 | grep -q -- "- chat_message_search: 2026-1
 mkdir -p "$HOME/.local/state/weekly-roundup/od6"
 echo '{"run_at":"2026-11-03T06:00:00Z","week_start":"2026-11-01","window_start":"2026-11-01T05:00:00Z","window_end":"2026-11-03T06:00:00Z"}' >"$HOME/.local/state/weekly-roundup/od6/window.json"
 page od6 outlook_email_search "$(dq 2026-11-02T06:00:00Z 2026-11-03T06:00:00Z)" '[{"id":1}]'
-if tz_names; then
-out=$(TZ=America/Chicago bash scripts/run-stats.sh od6)
+out=$(TZ=CST6CDT,M3.2.0,M11.1.0 bash scripts/run-stats.sh od6)
 grep -qx -- "- outlook_email_search: 2026-11-01" <<<"$out" && echo "ok   DST: local days across the change" || { echo "FAIL DST omitted days"; echo "$out"; fail=1; }
-else echo "skip America/Chicago omitted days: no named time zones here"; fi
 # Zones ahead of UTC: the window's last local day still gets checked.
 mkdir -p "$HOME/.local/state/weekly-roundup/od7"
 echo '{"run_at":"2026-10-27T18:00:00Z","week_start":"2026-10-25","window_start":"2026-10-24T13:30:00Z","window_end":"2026-10-27T18:00:00Z"}' >"$HOME/.local/state/weekly-roundup/od7/window.json"
 page od7 outlook_email_search "$(dq 2026-10-24T13:30:00Z 2026-10-27T18:00:00Z)" '[{"id":1}]'
-if tz_names; then
-out=$(TZ=Australia/Adelaide bash scripts/run-stats.sh od7)
+out=$(TZ=ACST-9:30ACDT,M10.1.0,M4.1.0/3 bash scripts/run-stats.sh od7)
 grep -qx -- "- chat_message_search: 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28" <<<"$out" && echo "ok   zone ahead of UTC: last local day checked" || { echo "FAIL Adelaide omitted days"; echo "$out"; fail=1; }
-else echo "skip Australia/Adelaide omitted days: no named time zones here"; fi
 . scripts/tz.sh; midnights 2026-13-45 >/dev/null 2>&1 && { echo "FAIL midnights accepts a bad date"; fail=1; } || echo "ok   midnights fails on a bad date"
 exit $fail

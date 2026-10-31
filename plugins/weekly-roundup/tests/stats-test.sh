@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for hooks/record.sh + scripts/run-stats.sh unread-page detection.
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 M=mcp__claude_ai_Microsoft_365__
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json"

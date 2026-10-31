@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for approval binding: hooks/approve.sh ("post N") + the Atlassian write check in hooks/guard.sh.
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json" WEEKLY_ROUNDUP_RUN=r
 A=mcp__atlassian__

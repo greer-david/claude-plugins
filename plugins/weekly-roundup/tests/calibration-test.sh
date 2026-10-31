@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for scripts/calibration-check.sh (calibration report coverage and totals).
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json" WEEKLY_ROUNDUP_RUN=cal
 echo '{"log_dir":"/tmp/x","rules_file":"/tmp/r.md"}' >"$tmp/c.json"

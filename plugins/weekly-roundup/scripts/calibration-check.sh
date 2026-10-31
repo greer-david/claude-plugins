@@ -1,4 +1,5 @@
 #!/bin/bash
+. "$(dirname "${BASH_SOURCE[0]}")/platform.sh"
 # Check a calibration report against its baseline list and write the totals into the report.
 # Usage: calibration-check.sh REPORT BASELINE
 #   BASELINE: one item per line, "- B<n> · <source> · <summary>" (written once, reviewed by the user).

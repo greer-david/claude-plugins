@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for scripts/sweep-local.sh GitHub sections, with gh stubbed (no network).
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json"
 echo '{"log_dir":"/tmp/x","rules_file":"/tmp/r.md","transcripts_dir":"'"$tmp"'/none"}' >"$tmp/c.json"

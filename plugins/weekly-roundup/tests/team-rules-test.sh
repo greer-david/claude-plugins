@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for scripts/team-rules.sh: reads team rules from a git ref (fetched first) or a plain file.
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 ok() { echo "ok   $1"; }
 bad() { echo "FAIL $1"; echo "$out"; fail=1; }

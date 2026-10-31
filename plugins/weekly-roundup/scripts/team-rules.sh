@@ -1,4 +1,5 @@
 #!/bin/bash
+. "$(dirname "${BASH_SOURCE[0]}")/platform.sh"
 # Print the team rules for a run. Usage: team-rules.sh
 # The first line is a status, then the rules text:
 #   STATUS: ok <source> @ <commit> (<date>)   read after a fresh fetch (or a plain file read)

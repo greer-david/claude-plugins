@@ -101,7 +101,8 @@ mklock() { ln -s "$1" "$2" || { echo "FAIL setup: lock $2 -> $1 not made (existi
 rm -f "$st/approvals.jsonl"; mklock "pid.$(bash -c 'echo $$').1" "$st/.run.lock"
 msg=$(say 'post 1')
 grep -q "approved for one write each: 1 (comment)" <<<"$msg" && ok "stale lock reclaimed for approvals" || bad "stale lock" "$msg"
-sleep 30 & live=$!; mklock "pid.$live.1" "$st/.run.lock"
+# The holder outlives take_lock's retries, which pass 30 s on Git Bash.
+sleep 300 & live=$!; mklock "pid.$live.1" "$st/.run.lock"
 msg=$(say 'post 2')
 grep -q "couldn't lock the approvals file" <<<"$msg" && [ "$(readlink "$st/.run.lock")" = "pid.$live.1" ] && ok "live lock not taken for approvals" || bad "live lock" "$msg"
 kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$st/.run.lock"

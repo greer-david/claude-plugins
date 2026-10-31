@@ -48,7 +48,9 @@ grep -q 'clerk work note' <<<"$out" && ! grep -q 'clerk diary\|clerk orphan' <<<
 mkdir -p "$tmp/p/dst"; cfg ''
 printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"late sunday"}}' >"$tmp/p/dst/a.jsonl"
 printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"late monday"}}' >"$tmp/p/dst/b.jsonl"
+if tz_names; then
 TZ=America/Chicago touch -t 202611012330 "$tmp/p/dst/a.jsonl"; TZ=America/Chicago touch -t 202611022330 "$tmp/p/dst/b.jsonl"
 out=$(TZ=America/Chicago PATH="$tmp/bin:$PATH" bash scripts/sweep-local.sh 2026-11-02 2026-11-02 2>&1)
 grep -q 'late monday' <<<"$out" && ! grep -q 'late sunday' <<<"$out" && echo "ok   DST: transcript day from local midnight" || { echo "FAIL DST transcript day"; echo "$out"; fail=1; }
+else echo "skip DST transcript day: no named time zones here"; fi
 exit $fail

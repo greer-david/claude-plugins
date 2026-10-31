@@ -73,6 +73,6 @@ out=$(bash scripts/config-json 2>&1) && bad "both keys rejected" || ok "both key
 cfg ',"team_rules":{"path":"p"}'
 out=$(bash scripts/config-json 2>&1) && bad "team_rules without repo rejected" || ok "team_rules without repo rejected"
 cfg ',"team_rules":{"repo":"~/r","path":"p"}'
-out=$(bash scripts/config-json 2>&1) && [ "$(jq -r .team_rules.repo <<<"$out")" = "$tmp/r" ] && [ "$(jq -r .team_rules.ref <<<"$out")" = origin/HEAD ] \
+out=$(bash scripts/config-json 2>&1) && { [ "$(jq -r .team_rules.repo <<<"$out")" = "$tmp/r" ] || [ "$(jq -r .team_rules.repo <<<"$out")" = "$(cygpath -m "$tmp/r" 2>/dev/null)" ]; } && [ "$(jq -r .team_rules.ref <<<"$out")" = origin/HEAD ] \
   && ok "team_rules repo ~ expanded, ref defaulted" || bad "team_rules defaults"
 exit $fail

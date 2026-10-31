@@ -89,8 +89,10 @@ printf 'not json\n' >"$tmp/home/.local/state/weekly-roundup/r1/calls.jsonl.tmp" 
 mkdir -p "$tmp/home/.local/state/weekly-roundup/r4"; printf 'garbage\n' >"$tmp/home/.local/state/weekly-roundup/r4/calls.jsonl"
 expect "corrupt call record blocks"           deny  "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r4
 mkdir -p "$tmp/ro/.local/state/weekly-roundup"; chmod a-w "$tmp/ro/.local/state/weekly-roundup"
+if ! touch "$tmp/ro/.local/state/weekly-roundup/.probe" 2>/dev/null; then
 expect "unwritable record: M365 blocked"      block "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_CONFIG="$tmp/config.json" WEEKLY_ROUNDUP_RUN=r5
 expect "unwritable record: Jira write blocked" block "{\"tool_name\":\"${A}addCommentToJiraIssue\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_RUN=r5
+else echo "skip unwritable record: chmod can't make a folder read-only here"; fi
 
 echo "-- size ceiling (total_kb 2)"
 jq '.budgets.total_kb = 2 | .budgets.default = 50' <<<"$cfgbase" >"$tmp/ceil.json"

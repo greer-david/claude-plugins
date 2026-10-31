@@ -11,7 +11,8 @@ echo "$cfgbase" >"$tmp/config.json"
 jq '.max_window_days="unlimited"' <<<"$cfgbase" >"$tmp/bad.json"
 
 # expect NAME WANT INPUT [ENV...]   WANT: allow (no output, exit 0) | deny | ask | block (exit 2)
-run_guard() { printf '%s' "$1" | env "${@:2}" bash "$g" 2>/dev/null; }
+# TRACE=FILE: bash -x the hook into FILE. Set it per call; TRACE_LOCK=1 traces the live-lock case (issue #3).
+run_guard() { printf '%s' "$1" | env "${@:2}" bash ${TRACE:+-x} "$g" 2>>"${TRACE:-/dev/null}"; }
 expect() {
   local name=$1 want=$2 in=$3; shift 3
   out=$(run_guard "$in" "$@"); rc=$?
@@ -132,7 +133,9 @@ mklock "garbage" "$lk"
 expect "malformed lock is reclaimed"          allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
 sleep 30 & live=$!
 mklock "pid.$live.1" "$lk"
+[ -n "${TRACE_LOCK:-}" ] && { echo "live=$live lock=$(readlink "$lk")"; ls -la "$st/lk"; TRACE=$tmp/trace; }
 expect "live lock is never taken"             block "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
+[ -n "${TRACE_LOCK:-}" ] && { grep -E 'ln -s|readlink|kill|rm -f|holder=|pid=|lock_dead|reclaim' "$tmp/trace" | head -30; unset TRACE; }
 [ "$(readlink "$lk")" = "pid.$live.1" ] && echo "ok   live lock left in place" || { echo "FAIL live lock removed"; fail=1; }
 kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$lk"
 # A hook killed while reclaiming leaves a reclaim lock naming a dead process: it is recovered too.

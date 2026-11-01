@@ -2,6 +2,7 @@
 # Self-test for the noise filter in hooks/record.sh and the Dropped table in scripts/run-stats.sh.
 # Results use the connector's shape: a list of text blocks, one JSON item each, paging info last.
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 M=mcp__claude_ai_Microsoft_365__
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json"

@@ -1,4 +1,5 @@
 #!/bin/bash
+. "$(dirname "${BASH_SOURCE[0]}")/platform.sh"
 # Print the weekly-roundup config as JSON with defaults merged in and ~ expanded.
 # Config: $WEEKLY_ROUNDUP_CONFIG or ~/.config/weekly-roundup/config.json. Needs only jq.
 # Exits non-zero if the config is missing or invalid, so callers can fail closed.

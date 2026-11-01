@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for scripts/sweep-local.sh GitHub sections, with gh stubbed (no network).
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json"
 echo '{"log_dir":"/tmp/x","rules_file":"/tmp/r.md","transcripts_dir":"'"$tmp"'/none"}' >"$tmp/c.json"
@@ -47,7 +48,7 @@ grep -q 'clerk work note' <<<"$out" && ! grep -q 'clerk diary\|clerk orphan' <<<
 mkdir -p "$tmp/p/dst"; cfg ''
 printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"late sunday"}}' >"$tmp/p/dst/a.jsonl"
 printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"late monday"}}' >"$tmp/p/dst/b.jsonl"
-TZ=America/Chicago touch -t 202611012330 "$tmp/p/dst/a.jsonl"; TZ=America/Chicago touch -t 202611022330 "$tmp/p/dst/b.jsonl"
-out=$(TZ=America/Chicago PATH="$tmp/bin:$PATH" bash scripts/sweep-local.sh 2026-11-02 2026-11-02 2>&1)
+TZ=CST6CDT,M3.2.0,M11.1.0 touch -t 202611012330 "$tmp/p/dst/a.jsonl"; TZ=CST6CDT,M3.2.0,M11.1.0 touch -t 202611022330 "$tmp/p/dst/b.jsonl"
+out=$(TZ=CST6CDT,M3.2.0,M11.1.0 PATH="$tmp/bin:$PATH" bash scripts/sweep-local.sh 2026-11-02 2026-11-02 2>&1)
 grep -q 'late monday' <<<"$out" && ! grep -q 'late sunday' <<<"$out" && echo "ok   DST: transcript day from local midnight" || { echo "FAIL DST transcript day"; echo "$out"; fail=1; }
 exit $fail

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for scripts/team-rules.sh: reads team rules from a git ref (fetched first) or a plain file.
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 ok() { echo "ok   $1"; }
 bad() { echo "FAIL $1"; echo "$out"; fail=1; }
@@ -72,6 +73,6 @@ out=$(bash scripts/config-json 2>&1) && bad "both keys rejected" || ok "both key
 cfg ',"team_rules":{"path":"p"}'
 out=$(bash scripts/config-json 2>&1) && bad "team_rules without repo rejected" || ok "team_rules without repo rejected"
 cfg ',"team_rules":{"repo":"~/r","path":"p"}'
-out=$(bash scripts/config-json 2>&1) && [ "$(jq -r .team_rules.repo <<<"$out")" = "$tmp/r" ] && [ "$(jq -r .team_rules.ref <<<"$out")" = origin/HEAD ] \
+out=$(bash scripts/config-json 2>&1) && { [ "$(jq -r .team_rules.repo <<<"$out")" = "$tmp/r" ] || [ "$(jq -r .team_rules.repo <<<"$out")" = "$(cygpath -m "$tmp/r" 2>/dev/null)" ]; } && [ "$(jq -r .team_rules.ref <<<"$out")" = origin/HEAD ] \
   && ok "team_rules repo ~ expanded, ref defaulted" || bad "team_rules defaults"
 exit $fail

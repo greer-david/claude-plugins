@@ -1,4 +1,5 @@
 # Shared by the hooks (sourced, not run). Bash and coreutils only.
+. "$(dirname "${BASH_SOURCE[0]}")/../scripts/platform.sh"
 
 # classify TOOL_NAME: sets kind (m365 | atlassian | empty for any other tool) and name (the tool
 # part, lowercase). Guarded tool names never contain "__"; if one does, name is "__invalid__".

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for approval binding: hooks/approve.sh ("post N") + the Atlassian write check in hooks/guard.sh.
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; fail=0
 export HOME="$tmp" WEEKLY_ROUNDUP_CONFIG="$tmp/c.json" WEEKLY_ROUNDUP_RUN=r
 A=mcp__atlassian__
@@ -94,11 +95,14 @@ out=$(WEEKLY_ROUNDUP_RUN= bash -c "jq -nc '{tool_name:\"${A}addCommentToJiraIssu
 [ "$out" = ask ] && ok "outside a run: writes still just ask" || bad "outside a run" "$out"
 printf 'garbage\n' >>"$st/approvals.jsonl"
 expect "corrupt approvals file denies"     deny addCommentToJiraIssue "$c1"
+# mklock TARGET PATH: makes a test lock, failing loudly if PATH already exists or ln can't link.
+mklock() { ln -s "$1" "$2" || { echo "FAIL setup: lock $2 -> $1 not made (existing: $(readlink "$2" 2>&1))"; ls -la "$(dirname "$2")"; fail=1; }; }
 # A lock left by a killed hook is reclaimed; a live one is not taken (shared take_lock in hooks/lib.sh).
-rm -f "$st/approvals.jsonl"; ln -s "pid.$(bash -c 'echo $$').1" "$st/.run.lock"
+rm -f "$st/approvals.jsonl"; mklock "pid.$(bash -c 'echo $$').1" "$st/.run.lock"
 msg=$(say 'post 1')
 grep -q "approved for one write each: 1 (comment)" <<<"$msg" && ok "stale lock reclaimed for approvals" || bad "stale lock" "$msg"
-sleep 30 & live=$!; ln -s "pid.$live.1" "$st/.run.lock"
+# The holder outlives take_lock's retries, which pass 30 s on Git Bash.
+sleep 300 & live=$!; mklock "pid.$live.1" "$st/.run.lock"
 msg=$(say 'post 2')
 grep -q "couldn't lock the approvals file" <<<"$msg" && [ "$(readlink "$st/.run.lock")" = "pid.$live.1" ] && ok "live lock not taken for approvals" || bad "live lock" "$msg"
 kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$st/.run.lock"

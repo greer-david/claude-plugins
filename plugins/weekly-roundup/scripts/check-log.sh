@@ -1,4 +1,5 @@
 #!/bin/bash
+. "$(dirname "${BASH_SOURCE[0]}")/platform.sh"
 # Check a weekly log's window frontmatter against what scripts/start-run.sh recorded for this run.
 # Usage: check-log.sh LOG   (exit 1 with the problems found)
 # Checks: run_at, week_start, the window and dry_run match the run; every "Possibly fell through the cracks"

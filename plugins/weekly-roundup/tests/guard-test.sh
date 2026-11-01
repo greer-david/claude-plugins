@@ -1,6 +1,7 @@
 #!/bin/bash
 # Self-test for hooks/guard.sh. Run: tests/guard-test.sh   (exit 0 = all passed)
 cd "$(dirname "$0")/.." || exit 1
+. scripts/platform.sh
 unset WEEKLY_ROUNDUP_RUN  # a roundup-session shell sets it; the cases below set it where they need a run
 g=hooks/guard.sh; M=mcp__claude_ai_Microsoft_365__; A=mcp__atlassian__; fail=0
 tmp=$(mktemp -d); trap 'chmod -R u+w "$tmp" 2>/dev/null; rm -rf "$tmp"' EXIT
@@ -88,8 +89,10 @@ printf 'not json\n' >"$tmp/home/.local/state/weekly-roundup/r1/calls.jsonl.tmp" 
 mkdir -p "$tmp/home/.local/state/weekly-roundup/r4"; printf 'garbage\n' >"$tmp/home/.local/state/weekly-roundup/r4/calls.jsonl"
 expect "corrupt call record blocks"           deny  "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=r4
 mkdir -p "$tmp/ro/.local/state/weekly-roundup"; chmod a-w "$tmp/ro/.local/state/weekly-roundup"
+if ! touch "$tmp/ro/.local/state/weekly-roundup/.probe" 2>/dev/null; then
 expect "unwritable record: M365 blocked"      block "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_CONFIG="$tmp/config.json" WEEKLY_ROUNDUP_RUN=r5
 expect "unwritable record: Jira write blocked" block "{\"tool_name\":\"${A}addCommentToJiraIssue\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_RUN=r5
+else echo "skip unwritable record: chmod can't make a folder read-only here"; fi
 
 echo "-- size ceiling (total_kb 2)"
 jq '.budgets.total_kb = 2 | .budgets.default = 50' <<<"$cfgbase" >"$tmp/ceil.json"
@@ -120,18 +123,20 @@ done
 echo "-- run lock"
 lk="$st/lk/.run.lock"; mkdir -p "$st/lk"
 dead() { bash -c 'echo $$'; }
-ln -s "pid.$(dead).1" "$lk"
+# mklock TARGET PATH: makes a test lock, failing loudly if PATH already exists or ln can't link.
+mklock() { ln -s "$1" "$2" || { echo "FAIL setup: lock $2 -> $1 not made (existing: $(readlink "$2" 2>&1))"; ls -la "$(dirname "$2")"; fail=1; }; }
+mklock "pid.$(dead).1" "$lk"
 expect "lock of a dead hook is reclaimed"     allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
 [ ! -e "$lk" ] && [ ! -L "$lk" ] && echo "ok   lock released after the call" || { echo "FAIL lock left behind"; fail=1; }
-ln -s "garbage" "$lk"
+mklock "garbage" "$lk"
 expect "malformed lock is reclaimed"          allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
-sleep 30 & live=$!
-ln -s "pid.$live.1" "$lk"
+sleep 300 & live=$!  # outlives take_lock's retries, which pass 30 s on Git Bash
+mklock "pid.$live.1" "$lk"
 expect "live lock is never taken"             block "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
 [ "$(readlink "$lk")" = "pid.$live.1" ] && echo "ok   live lock left in place" || { echo "FAIL live lock removed"; fail=1; }
 kill $live 2>/dev/null; wait $live 2>/dev/null; rm -f "$lk"
 # A hook killed while reclaiming leaves a reclaim lock naming a dead process: it is recovered too.
-ln -s "pid.$(dead).1" "$lk"; ln -s "pid.$(dead)" "$st/lk/.run.lock.reclaim"
+mklock "pid.$(dead).1" "$lk"; mklock "pid.$(dead)" "$st/lk/.run.lock.reclaim"
 expect "dead reclaim lock is recovered"       allow "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=lk
 [ ! -L "$st/lk/.run.lock.reclaim" ] && echo "ok   dead reclaim lock removed" || { echo "FAIL reclaim lock left"; fail=1; }
 # A dead holder's lock and 12 hooks racing to reclaim it: the budget still holds, so no hook removed a live lock.

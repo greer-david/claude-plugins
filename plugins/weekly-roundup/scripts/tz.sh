@@ -1,3 +1,4 @@
+. "$(dirname "${BASH_SOURCE[0]}")/platform.sh"
 # Local-time helpers, sourced by the scripts. jq can't tell the UTC offset of a given instant
 # (strflocaltime("%z") gives the current offset on macOS and +0000 on Linux), so ask date:
 # GNU `date -d @T`, else BSD `date -r T` (docs/adr/0003).

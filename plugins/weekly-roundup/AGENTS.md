@@ -13,6 +13,7 @@ Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and 
 - `hooks/record.sh`: PostToolUse on MCP tools; for M365 and Atlassian, the call record for roundup runs (result bytes feed the guard's `budgets.total_kb` ceiling), and the noise filter (`noise_senders`, `alert_patterns`, `mute_chats` by chat ID) that rewrites email and chat search results via `updatedMCPToolOutput` and records Dropped counts
 - `scripts/config-json`: config plus defaults as JSON
 - `scripts/team-rules.sh`: prints the team rules after a `STATUS:` line (`ok`, `stale`, `missing`, `none`); with `team_rules` it fetches and reads `<ref>:<path>` from the clone, leaving the checkout alone
+- `scripts/platform.sh`: sourced by every script, hook and test (directly or via `lib.sh`/`tz.sh`; safe to source twice). On Git Bash only: `jq -b` (Windows jq writes CRLF) and `MSYS=winsymlinks:sys` (`ln -s` makes a real symlink, needed by the run lock)
 - `scripts/tz.sh`: sourced by the scripts; `offset_at`, `midnights DATE...` (each day's local midnight, with that day's own UTC offset), `local_to_utc` (a zone-less time at its own offset) and `local_stamp` (docs/adr/0003)
 - `scripts/start-run.sh [--week D | --since X] [--dry-run]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it. The previous run is read from `covered.jsonl` (from log frontmatter only before the first checkpoint, so editing a log can't skip a span); dry runs are never recorded
 - `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
@@ -39,4 +40,4 @@ Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and 
 
 ## Releasing
 
-Bump `version` in `.claude-plugin/plugin.json` and in the root `.claude-plugin/marketplace.json` on every change. Installed copies refresh only when the version changes. Run every test in `tests/` before committing (and `tests/linux.sh` when you touch shell or date code).
+Bump `version` in `.claude-plugin/plugin.json` and in the root `.claude-plugin/marketplace.json` on every change. Installed copies refresh only when the version changes. Run every test in `tests/` before committing (and `tests/linux.sh` when you touch shell or date code). On Git Bash the tests skip read-only folders, and starting processes is slow: a contended `take_lock` waits over 30 s, so test lock holders must outlive that.

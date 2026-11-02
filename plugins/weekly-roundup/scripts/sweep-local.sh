@@ -90,7 +90,7 @@ echo "## SESSIONS"
 clerk=$(c '.clerk_dir // empty'); tdir=$(c '.transcripts_dir'); skips=$(c '.skip_projects // [] | join("|")')
 # Allow-list: a session counts only if its cwd is a session_dirs entry or inside one. Others are
 # counted in STATS, never named, so personal projects don't leak into a work log.
-sdirs=$(c '.session_dirs[]'); nskip=0
+sdirs=$(c '.session_dirs[]'); nskip=0; nrun=0
 # Paths compare in Git Bash form (posix_path): on Windows, transcripts record C:\Users\..., configs /c/Users/....
 inside() { local d p; [ -n "$1" ] || return 1; p=$(posix_path "$1"); while IFS= read -r d; do d=$(posix_path "${d%/}"); [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
 # clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
@@ -118,6 +118,11 @@ while [[ ! "$d" > "$end" ]]; do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
     inside "$tcwd" || { nskip=$((nskip+1)); continue; }
+    # Earlier roundup runs: their transcripts hold other people's mail and chats, and agent reports
+    # that would be swept back in as work. Counted, never read. (Setup sessions are swept.)
+    jq -e 'select(.type=="user" and (.message.content|type)=="string") | .message.content
+           | select(test("<command-name>/weekly-roundup(:weekly-roundup)?</command-name>|^\\s*/weekly-roundup(:weekly-roundup)?(\\s|$)"))' \
+       "$t" >/dev/null 2>&1 && { nrun=$((nrun+1)); continue; }
     # Through the environment, not -v: awk -v reads backslashes as escapes (C:\Users becomes C:Users).
     slug=$(c="$tcwd" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
     [ -n "$slug" ] && [ -f "$clerk/summary/$dd/$slug.md" ] && continue
@@ -133,6 +138,7 @@ while [[ ! "$d" > "$end" ]]; do
 done
 
 [ "$nskip" -gt 0 ] && stats+=("sessions|outside session_dirs|skipped|$nskip|-")
+[ "$nrun" -gt 0 ] && stats+=("sessions|roundup runs|skipped|$nrun|-")
 echo "## STATS"
 echo "source|item|status|size|cap hit"
 printf '%s\n' "${stats[@]}"

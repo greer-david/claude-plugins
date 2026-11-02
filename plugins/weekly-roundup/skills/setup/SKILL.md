@@ -37,8 +37,9 @@ Derive what you can, then show the whole list once for the user to confirm or co
 - `m365.my_addresses`: `git config user.email` and Microsoft 365 `get_me` if loaded; ask for aliases.
 - `github_user`: `gh api user --jq .login`.
 - `repos`: the local clones the user works in. Offer the team repo's clone and any sibling folder whose `origin` is in `github_repos`. Add each repo's GitHub `owner/name` to `github_repos`.
-- `log_dir`: somewhere private, such as their own notes folder. A log holds summaries of other people's mail and chats, so it must be outside every shared repo: check with `git -C <dir> rev-parse --show-toplevel` and push back if it lands in one.
-- `rules_file`: a personal file beside `log_dir`, not inside it.
+- `log_dir`: somewhere private, such as their own notes folder. A log holds summaries of other people's mail and chats, so it must be outside every shared repo: check with `git -C <dir> rev-parse --show-toplevel` and push back if it lands in one. Push back on shared or team-synced folders (SharePoint, a shared OneDrive folder) too; a personal OneDrive folder is fine. Offer the template default (`~/notes/Work/Weekly`) to anyone without a preference.
+- `rules_file`: a personal file beside `log_dir`, not inside it (default `~/notes/roundup-rules.md`). It holds their learned rules and grows from their corrections.
+- On Windows, write both paths the Git Bash way: `~/...` or `/c/Users/<name>/...`, forward slashes. If the user gives `C:\Users\...`, convert it with `cygpath -u` and show them the result. Spaces in folder names (`OneDrive - Company`) need no escaping in the JSON.
 - `clerk_dir`: clerk's `output.dir`, only if clerk is installed.
 - `reviewers`: the names wording rules refer to (optional).
 
@@ -52,7 +53,7 @@ Build the config: team values, then personal values on top. Show the full JSON. 
 
 - Copy `skills/weekly-roundup/templates/rules.md` to `rules_file` if that file doesn't exist yet.
 - Run `scripts/team-rules.sh`. The first line must be `STATUS: ok` (or `STATUS: none` with no team rules). On `missing` or `stale`, fix the path, ref or remote with the user and run it again.
-- Offer the shell lines from README.md "Microsoft 365 only in roundup sessions". Pick the rc file from `$SHELL`, skip lines already there, and append after the user agrees. On Windows they go in Git Bash's `~/.bashrc`, and roundups start from Git Bash; tell the user this, since they may never have opened it.
+- Offer the shell lines from README.md "Microsoft 365 only in roundup sessions". Pick the rc file from `$SHELL`, skip lines already there, and append after the user agrees. On Windows they go in Git Bash's `~/.bashrc`, and roundups start from Git Bash; tell the user this, since they may never have opened it. Git Bash starts a login shell, which reads `~/.bash_profile`: if that file exists and doesn't source `~/.bashrc`, offer to append `[ -f ~/.bashrc ] && . ~/.bashrc`. Done when `bash -lic 'type roundup-session'` prints the alias.
 
 ## 6. Test and hand over
 

@@ -58,15 +58,14 @@ What the setup skill does, if you'd rather do it yourself.
    - **Team rules** live in your team's repo (for example `docs/weekly-roundup/team-rules.md`) and change by PR. Set `team_rules` to your clone, the branch the rules are merged to, and the file: `{"repo": "~/repos/team-repo", "ref": "origin/main", "path": "docs/weekly-roundup/team-rules.md"}`. Each run fetches and reads that branch's copy, whatever you have checked out, so you never need to pull. If the fetch fails, the run uses the last fetched copy and says so in the log. If your team doesn't have the file yet, add one from `templates/team-rules.md` by PR, or leave `team_rules` out until it's merged.
    - **Personal rules:** copy `templates/rules.md` to wherever `rules_file` points. It starts empty and grows from your corrections.
 
-4. **Microsoft 365 only in roundup sessions (recommended).** Keep claude.ai connectors out of your everyday sessions and turn them on just for roundups. Add to `~/.zshrc` (or `~/.bashrc`):
+4. **Roundup aliases.** Start roundups through these, so `WEEKLY_ROUNDUP_RUN` is set: it turns on the guard's date window, call budgets and approval binding. Add to `~/.zshrc` (Git Bash on Windows: `~/.bashrc`):
 
    ```
-   export ENABLE_CLAUDEAI_MCP_SERVERS=false
    alias roundup='env -u ENABLE_CLAUDEAI_MCP_SERVERS WEEKLY_ROUNDUP_RUN=$(date +%Y%m%dT%H%M%S) claude "/weekly-roundup"'
    alias roundup-session='env -u ENABLE_CLAUDEAI_MCP_SERVERS WEEKLY_ROUNDUP_RUN=$(date +%Y%m%dT%H%M%S) claude'
    ```
 
-   Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
+   **Optional: Microsoft 365 only in roundup sessions.** To keep claude.ai connectors out of your everyday sessions, also add `export ENABLE_CLAUDEAI_MCP_SERVERS=false`; the aliases turn them back on for roundups. Without it, the aliases work the same and M365 stays loaded everywhere (outside a run the guard allows only reads). Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
 5. **Check the hook works:** from the installed plugin folder, run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, team-rules, window). Every line should say `ok`. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
 

@@ -67,7 +67,7 @@ What the setup skill does, if you'd rather do it yourself.
 
    **Optional: Microsoft 365 only in roundup sessions.** To keep claude.ai connectors out of your everyday sessions, also add `export ENABLE_CLAUDEAI_MCP_SERVERS=false`; the aliases turn them back on for roundups. Without it, the aliases work the same and M365 stays loaded everywhere (outside a run the guard allows only reads). Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
-5. **Check the hook works:** from the installed plugin folder, run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, team-rules, window). Every line should say `ok`. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
+5. **Check the hook works:** from the installed plugin folder, run `bash tests/guard-test.sh --quick`. Every line should say `ok`. Contributors run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, team-rules, window); on Git Bash that takes about half an hour. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
 
 ### For teams
 

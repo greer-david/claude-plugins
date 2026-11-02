@@ -71,6 +71,6 @@ out=$(jq -c --arg kind "$kind" --arg name "$name" --argjson cfg "$cfg" --arg ts 
     end
   | .rec.bytes = ((.out // $r) | tostring | length)
 ' <<<"$input" 2>/dev/null) || exit 0
-jq -c '.rec' <<<"$out" >>"$state/calls.jsonl" 2>/dev/null
+take_lock && jq -c '.rec' <<<"$out" >>"$state/calls.jsonl" 2>/dev/null
 jq -ce 'select(.out != null) | {hookSpecificOutput: {hookEventName: "PostToolUse", updatedMCPToolOutput: .out}}' <<<"$out" 2>/dev/null
 exit 0

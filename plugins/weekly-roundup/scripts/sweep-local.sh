@@ -91,7 +91,8 @@ clerk=$(c '.clerk_dir // empty'); tdir=$(c '.transcripts_dir'); skips=$(c '.skip
 # Allow-list: a session counts only if its cwd is a session_dirs entry or inside one. Others are
 # counted in STATS, never named, so personal projects don't leak into a work log.
 sdirs=$(c '.session_dirs[]'); nskip=0
-inside() { local d; [ -n "$1" ] || return 1; while IFS= read -r d; do d=${d%/}; [ -n "$d" ] || continue; case "$1" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
+# Paths compare in Git Bash form (posix_path): on Windows, transcripts record C:\Users\..., configs /c/Users/....
+inside() { local d p; [ -n "$1" ] || return 1; p=$(posix_path "$1"); while IFS= read -r d; do d=$(posix_path "${d%/}"); [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
 # clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
 # is read only when clerk has no summary for that session's project on that day.
 cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do jq -r --arg s "$(basename "$j" .json)" '"\(.cwd)\t\($s)"' "$j" 2>/dev/null; done )
@@ -122,7 +123,7 @@ while [[ ! "$d" > "$end" ]]; do
     txt=$( { jq -r 'select(.type=="user" and (.message.content|type)=="string") | "USER: " + .message.content' "$t" 2>/dev/null
              jq -rs '[.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text] | last // empty | "FINAL: " + .' "$t" 2>/dev/null; } )
     [ -n "$txt" ] || continue
-    name=${tcwd#"$HOME"/}
+    name=$(posix_path "$tcwd"); name=${name#"$HOME"/}
     bytes=${#txt}; hit=no; [ "$bytes" -gt $((cap_tkb*1024)) ] && hit=yes
     echo "### $(late "$d")transcript $d $name"; head -c $((cap_tkb*1024)) <<<"$txt"; echo
     stats+=("transcript|$d $name|no clerk summary|$bytes B|$hit")

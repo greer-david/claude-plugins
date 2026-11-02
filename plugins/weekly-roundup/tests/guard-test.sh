@@ -1,5 +1,6 @@
 #!/bin/bash
 # Self-test for hooks/guard.sh. Run: tests/guard-test.sh   (exit 0 = all passed)
+# --quick: classification and fail-closed only, for setup (seconds, even on Git Bash).
 cd "$(dirname "$0")/.." || exit 1
 . scripts/platform.sh
 unset WEEKLY_ROUNDUP_RUN  # a roundup-session shell sets it; the cases below set it where they need a run
@@ -51,6 +52,7 @@ mkdir -p "$tmp/bin"; for b in bash cat dirname env; do ln -sf "$(command -v $b)"
 expect "no jq: M365 blocked"                  block "{\"tool_name\":\"${M}get_me\"}" PATH="$tmp/bin" "${H[@]}"
 expect "no jq: escaped name blocked"          block '{"tool_name":"mcp__claude_ai_Microsoft_365__x"}' PATH="$tmp/bin" "${H[@]}"
 expect "no jq: any MCP call blocked"          block '{"tool_name":"mcp__clerk__clerk-resume"}' PATH="$tmp/bin" "${H[@]}"
+[ "${1:-}" = --quick ] && exit $fail
 
 echo "-- roundup run"
 st="$tmp/home/.local/state/weekly-roundup"; mkdir -p "$st/r1" "$st/w1"

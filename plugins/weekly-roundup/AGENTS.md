@@ -20,7 +20,7 @@ Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and 
 - `scripts/check-log.sh LOG`: fails if the log's window frontmatter or dry_run differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To; on ok, records a real run's window in `~/.local/state/weekly-roundup/covered.jsonl`
 - `scripts/calibration-check.sh REPORT BASELINE`: `--calibrate` coverage check (every baseline item has a row with an allowed result and cause) that writes the totals and run-stats into the report
 - `scripts/run-stats.sh [RUN]`: M365 call table, errors, unread pages and omitted days (window days no successful email or chat search covered) from the call record
-- `tests/guard-test.sh`: guard self-test (classification, fail-closed, dates, parallel budgets)
+- `tests/guard-test.sh`: guard self-test (classification, fail-closed, dates, parallel budgets); `--quick` stops after fail-closed, for setup
 - `tests/stats-test.sh`: recorder (errors, classification) + unread-page and omitted-day detection self-test
 - `tests/filter-test.sh`: noise filter + Dropped table self-test
 - `tests/calibration-test.sh`: calibration-check self-test

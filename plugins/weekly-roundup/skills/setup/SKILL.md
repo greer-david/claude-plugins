@@ -57,6 +57,6 @@ Build the config: team values, then personal values on top. Show the full JSON. 
 
 ## 6. Test and hand over
 
-Run `for t in tests/*-test.sh; do bash "$t"; done`. Every line must say `ok`; show any failure in full.
+Run `bash tests/guard-test.sh --quick`: the guard's classification and fail-closed checks, which prove the safety hook works on this machine. Every line must say `ok`; show any failure in full. Don't run the full suite here; it's for contributors and takes half an hour on Git Bash.
 
 Finish with what was written (config, rules file, rc lines) and the first run: open a new terminal so the aliases load, type `roundup-session`, then `/weekly-roundup --dry-run`, and read the log as README.md "First run" describes.

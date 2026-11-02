@@ -39,6 +39,15 @@ cfg ',"repos":[],"session_dirs":["'"$tmp"'/home-diary"]'; out=$(sw)
 grep -q 'private diary' <<<"$out" && ! grep -q 'work bug' <<<"$out" && echo "ok   explicit session_dirs" || { echo "FAIL explicit session_dirs"; echo "$out"; fail=1; }
 cfg ',"session_dirs":["'"$tmp"'/repos/ma"]'; out=$(sw)
 grep -q 'work bug' <<<"$out" && { echo "FAIL prefix match without path boundary"; fail=1; } || echo "ok   path-boundary match"
+# Windows: Claude Code records cwd as C:\Users\...; session_dirs may be /c/... or C:/... (Git Bash forms).
+mkdir -p "$tmp/p/win"; printf '%s\n' '{"cwd":"C:\\Users\\me\\repos\\wr\\sub","type":"user","message":{"content":"windows work"}}' >"$tmp/p/win/w.jsonl"
+touch -t 202610201200 "$tmp/p/win/w.jsonl"
+for sd in /c/Users/me/repos/wr C:/Users/me/repos/wr; do
+  cfg ',"repos":[],"session_dirs":["'"$sd"'"]'; out=$(sw)
+  grep -q 'windows work' <<<"$out" && grep -q 'transcript 2026-10-20 /c/Users/me/repos/wr/sub' <<<"$out" \
+    && echo "ok   Windows cwd matches session_dirs $sd" || { echo "FAIL Windows cwd vs $sd"; echo "$out"; fail=1; }
+done
+rm -rf "$tmp/p/win"
 mkdir -p "$tmp/clerk/slug" "$tmp/clerk/summary/20261021"
 echo '{"cwd":"'"$tmp"'/home-diary"}' >"$tmp/clerk/slug/diary.json"; echo '{"cwd":"'"$tmp"'/repos/main"}' >"$tmp/clerk/slug/main.json"
 echo 'clerk diary note' >"$tmp/clerk/summary/20261021/diary.md"; echo 'clerk work note' >"$tmp/clerk/summary/20261021/main.md"; echo 'clerk orphan' >"$tmp/clerk/summary/20261021/unknown.md"

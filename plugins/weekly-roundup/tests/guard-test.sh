@@ -111,6 +111,14 @@ expect "Atlassian read, bad config in a run"  deny  "{\"tool_name\":\"${A}getJir
 jq '.budgets.total_kb = 0' <<<"$cfgbase" >"$tmp/zero.json"
 expect "total_kb 0 is invalid config"         deny  "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/home" WEEKLY_ROUNDUP_CONFIG="$tmp/zero.json" WEEKLY_ROUNDUP_RUN=ce
 
+echo "-- parallel denials (call record stays valid)"
+# Denied calls are recorded too. Each append holds the run lock: on Git Bash >> isn't atomic, and two
+# denials in the same second once interleaved into one bad line, which then denied every later call.
+mkdir -p "$st/pd"; wj 2026-10-18T05:00:00Z 2026-10-25T05:00:00Z >"$st/pd/window.json"
+for i in $(seq 1 12); do run_guard "{\"tool_name\":\"${M}sharepoint_search\",\"tool_input\":{\"query\":\"q$i\",\"afterDateTime\":\"2026-10-19\"}}" "${R[@]}" WEEKLY_ROUNDUP_RUN=pd >/dev/null & done; wait
+n=$(jq -s 'length' "$st/pd/calls.jsonl" 2>/dev/null)
+[ "$n" = 12 ] && echo "ok   12 parallel denials: 12 valid records" || { echo "FAIL parallel denials: record has ${n:-unparseable} valid records (want 12)"; fail=1; }
+
 echo "-- parallel budget (get_me budget 3, 12 at once)"
 for i in $(seq 1 12); do (run_guard "{\"tool_name\":\"${M}get_me\"}" "${R[@]}" WEEKLY_ROUNDUP_RUN=par >"$tmp/par.$i"; echo $? >"$tmp/par.$i.rc") & done; wait
 allowed=0; for i in $(seq 1 12); do [ "$(cat "$tmp/par.$i.rc")" = 0 ] && [ ! -s "$tmp/par.$i" ] && allowed=$((allowed+1)); done

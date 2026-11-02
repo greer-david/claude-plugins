@@ -23,14 +23,17 @@ classify() {
 # target names its holder ("pid.<pid>.<token>"), made in one step by ln -s, so it never exists
 # without a holder. A lock whose holder is dead is removed under a second lock, and only if it still
 # names that holder, so a live replacement is never removed. take_lock returns non-zero if it can't
-# get the lock (the caller fails closed); the lock is released on exit.
+# get the lock (the caller fails closed); the lock is released on exit. Every append to calls.jsonl
+# holds it, and so does every read of it: Git Bash's >> isn't atomic, so parallel hooks' lines can
+# interleave into one bad line. Taking it again while held is a no-op.
 take_lock() {
+  [ -n "${lock_held:-}" ] && return 0  # already ours
   mkdir -p "$state" 2>/dev/null || return 1
   lock="$state/.run.lock"
   lock_id="pid.$$.$RANDOM$RANDOM"
   local holder
   for _ in $(seq 1 100); do
-    if ln -s "$lock_id" "$lock" 2>/dev/null; then trap release_lock EXIT; return 0; fi
+    if ln -s "$lock_id" "$lock" 2>/dev/null; then trap release_lock EXIT; lock_held=1; return 0; fi
     holder=$(readlink "$lock" 2>/dev/null) && lock_dead "$holder" && reclaim_lock "$holder" && continue
     sleep 0.05
   done

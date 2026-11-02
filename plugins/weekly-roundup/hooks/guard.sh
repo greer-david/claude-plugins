@@ -29,7 +29,7 @@ key="$kind:$name"
 
 record() {  # decision reason -> fails if the record can't be written
   [ -n "$run" ] || return 0
-  mkdir -p "$state" &&
+  mkdir -p "$state" && take_lock &&
   jq -c --arg d "$1" --arg r "$2" --arg k "$key" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{ts:$ts, phase:"pre", tool:.tool_name, key:$k, decision:$d, reason:$r, input:.tool_input}' \
     <<<"$input" >>"$state/calls.jsonl"
@@ -48,6 +48,7 @@ ceiling() {
   [ -n "$run" ] || return 0
   local cap kb
   cap=$(jq -r '.budgets.total_kb' <<<"$cfg") && [[ $cap =~ ^[0-9]+$ ]] || decide deny "no valid budgets.total_kb"
+  take_lock || block "couldn't lock the call record ($state/.run.lock*; remove it if no roundup is running); blocked."
   [ -f "$state/calls.jsonl" ] || return 0
   kb=$(jq -s '[.[] | select(.phase == "post") | .bytes // 0] | add // 0 | . / 1024 | floor' "$state/calls.jsonl" 2>/dev/null) \
     || decide deny "the call record is unreadable, so the size ceiling can't be checked"

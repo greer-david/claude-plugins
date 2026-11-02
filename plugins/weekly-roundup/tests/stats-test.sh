@@ -51,6 +51,9 @@ page x3 teams_list_chats '{}' 'HTTP 503 Service Unavailable'; erris "HTTP error 
 page x4 teams_list_chats '{}' 'Request failed with status 403 Forbidden'; erris "status code in short text" x4 true
 page x5 outlook_email_search "$q}" '{"subject":"500 error on prod","summary":"we saw a 500 error"}'; erris "item mentioning an error isn't an error" x5 false
 page x6 teams_list_chats '{}' '[{"id":1}]'; erris "plain result isn't an error" x6 false
+page x7 read_resource '{}' 'INTERNAL_ERROR: Failed to fetch Outlook email message caused by: Id is malformed.'; erris "error code prefix (INTERNAL_ERROR)" x7 true
+page x8 outlook_calendar_search '{}' 'MCP error -32602: Input validation error'; erris "MCP error text" x8 true
+page x9 teams_list_chats '{}' 'Errors: none found in this chat'; erris "text starting with Errors isn't an error code" x9 false
 # One classification for guard and recorder (#3): aliases and odd names are recorded under the guard's key.
 rec al "$(jq -nc '{tool_name:"mcp__M365__Teams_List_Chats", tool_input:{}, tool_response:{content:[{type:"text",text:"[]"}]}}')"
 rec al "$(jq -nc '{tool_name:"mcp__microsoft_365__a__b", tool_input:{}, tool_response:"x"}')"

@@ -25,12 +25,13 @@ out=$(jq -c --arg kind "$kind" --arg name "$name" --argjson cfg "$cfg" --arg ts 
      input: .tool_input,
      # An error: an isError flag anywhere (also in JSON inside text), an "error" member of the result
      # or of a text block that is JSON, or a short text block that is not JSON and reads like an HTTP error
-     # (only unstructured text: words in a structured field like a subject are data).
+     # (only unstructured text: words in a structured field like a subject are data). Error-code prefixes
+     # count too: INTERNAL_ERROR: ..., MCP error -32602: ....
      error: (([$docs[] | .. | objects | (.isError?, .is_error?)] | any(. == true))
             or any($docs[] | objects | .error? // null; . != null and . != false and . != "")
             or any($r | if type == "string" then . else ((if type == "array" then .[] else .content[]? end) | objects | select(.type == "text") | .text | strings) end
                    | select(length < 500 and (try fromjson catch null) == null);
-                   test("^\\s*(error\\b|http/?[0-9.]* [45][0-9]{2}\\b|[45][0-9]{2}\\b)"; "i")
+                   test("^\\s*((mcp )?error\\b|[a-z_]*_error\\b|http/?[0-9.]* [45][0-9]{2}\\b|[45][0-9]{2}\\b)"; "i")
                    or test("\\b(401|403|404|408|429|5[0-9]{2})\\b.{0,40}(forbidden|unauthorized|not found|timeout|too many requests|error|unavailable)"; "i"))),
      next: ([$docs[] | .. | objects | (.nextOffset?, .nextCursor?) | select(. != null and . != "")] | first // null)} as $rec
   # An opened email (read_resource): whether the user is in To (m365.my_addresses), and its IDs, so

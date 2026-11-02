@@ -55,6 +55,16 @@ cfg ',"repos":[],"session_dirs":["/c/Users/me/repos/wr"],"clerk_dir":"'"$tmp"'/c
 grep -q 'clerk windows note' <<<"$out" && ! grep -q 'windows work' <<<"$out" && ! grep -q 'awk: warning' <<<"$out" \
   && echo "ok   Windows transcript uses its clerk summary" || { echo "FAIL Windows clerk match"; echo "$out"; fail=1; }
 rm -rf "$tmp/p/win" "$tmp/clerk"
+# Earlier roundup runs aren't swept (they hold others' mail and chats); setup sessions are.
+mkdir -p "$tmp/p/rr"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"<command-name>/weekly-roundup:weekly-roundup</command-name>"}}' '{"type":"user","message":{"content":"roundup secret mail"}}' >"$tmp/p/rr/a.jsonl"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"/weekly-roundup --dry-run"}}' '{"type":"user","message":{"content":"alias roundup text"}}' >"$tmp/p/rr/b.jsonl"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"<command-name>/weekly-roundup:setup</command-name>"}}' '{"type":"user","message":{"content":"setup work"}}' >"$tmp/p/rr/c.jsonl"
+touch -t 202610201200 "$tmp/p/rr/a.jsonl" "$tmp/p/rr/b.jsonl" "$tmp/p/rr/c.jsonl"
+cfg ''; out=$(sw)
+! grep -q 'roundup secret mail\|alias roundup text' <<<"$out" && grep -q 'setup work' <<<"$out" && grep -q 'sessions|roundup runs|skipped|2|-' <<<"$out" \
+  && echo "ok   earlier roundup runs skipped, setup swept" || { echo "FAIL roundup run skip"; echo "$out"; fail=1; }
+rm -rf "$tmp/p/rr"
 mkdir -p "$tmp/clerk/slug" "$tmp/clerk/summary/20261021"
 echo '{"cwd":"'"$tmp"'/home-diary"}' >"$tmp/clerk/slug/diary.json"; echo '{"cwd":"'"$tmp"'/repos/main"}' >"$tmp/clerk/slug/main.json"
 echo 'clerk diary note' >"$tmp/clerk/summary/20261021/diary.md"; echo 'clerk work note' >"$tmp/clerk/summary/20261021/main.md"; echo 'clerk orphan' >"$tmp/clerk/summary/20261021/unknown.md"

@@ -47,7 +47,14 @@ for sd in /c/Users/me/repos/wr C:/Users/me/repos/wr; do
   grep -q 'windows work' <<<"$out" && grep -q 'transcript 2026-10-20 /c/Users/me/repos/wr/sub' <<<"$out" \
     && echo "ok   Windows cwd matches session_dirs $sd" || { echo "FAIL Windows cwd vs $sd"; echo "$out"; fail=1; }
 done
-rm -rf "$tmp/p/win"
+# A Windows transcript whose project has a clerk summary that day is read from clerk, not the transcript.
+mkdir -p "$tmp/clerk/slug" "$tmp/clerk/summary/20261020"
+printf '%s\n' '{"cwd":"C:\\Users\\me\\repos\\wr\\sub"}' >"$tmp/clerk/slug/wr.json"
+echo "clerk windows note" >"$tmp/clerk/summary/20261020/wr.md"
+cfg ',"repos":[],"session_dirs":["/c/Users/me/repos/wr"],"clerk_dir":"'"$tmp"'/clerk"'; out=$(sw)
+grep -q 'clerk windows note' <<<"$out" && ! grep -q 'windows work' <<<"$out" && ! grep -q 'awk: warning' <<<"$out" \
+  && echo "ok   Windows transcript uses its clerk summary" || { echo "FAIL Windows clerk match"; echo "$out"; fail=1; }
+rm -rf "$tmp/p/win" "$tmp/clerk"
 mkdir -p "$tmp/clerk/slug" "$tmp/clerk/summary/20261021"
 echo '{"cwd":"'"$tmp"'/home-diary"}' >"$tmp/clerk/slug/diary.json"; echo '{"cwd":"'"$tmp"'/repos/main"}' >"$tmp/clerk/slug/main.json"
 echo 'clerk diary note' >"$tmp/clerk/summary/20261021/diary.md"; echo 'clerk work note' >"$tmp/clerk/summary/20261021/main.md"; echo 'clerk orphan' >"$tmp/clerk/summary/20261021/unknown.md"

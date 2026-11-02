@@ -118,7 +118,8 @@ while [[ ! "$d" > "$end" ]]; do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
     inside "$tcwd" || { nskip=$((nskip+1)); continue; }
-    slug=$(awk -F'\t' -v c="$tcwd" '$1==c{print $2; exit}' <<<"$cwdmap")
+    # Through the environment, not -v: awk -v reads backslashes as escapes (C:\Users becomes C:Users).
+    slug=$(c="$tcwd" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
     [ -n "$slug" ] && [ -f "$clerk/summary/$dd/$slug.md" ] && continue
     txt=$( { jq -r 'select(.type=="user" and (.message.content|type)=="string") | "USER: " + .message.content' "$t" 2>/dev/null
              jq -rs '[.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text] | last // empty | "FINAL: " + .' "$t" 2>/dev/null; } )

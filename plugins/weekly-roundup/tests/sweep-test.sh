@@ -77,4 +77,33 @@ printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"
 TZ=CST6CDT,M3.2.0,M11.1.0 touch -t 202611012330 "$tmp/p/dst/a.jsonl"; TZ=CST6CDT,M3.2.0,M11.1.0 touch -t 202611022330 "$tmp/p/dst/b.jsonl"
 out=$(TZ=CST6CDT,M3.2.0,M11.1.0 PATH="$tmp/bin:$PATH" bash scripts/sweep-local.sh 2026-11-02 2026-11-02 2>&1)
 grep -q 'late monday' <<<"$out" && ! grep -q 'late sunday' <<<"$out" && echo "ok   DST: transcript day from local midnight" || { echo "FAIL DST transcript day"; echo "$out"; fail=1; }
+rm -rf "$tmp/p/dst"
+# Codex sessions (default dir ~/.codex/sessions): user-started threads in session_dirs, own text plus final reply.
+cx="$tmp/.codex/sessions/2026/10/20"; mkdir -p "$cx"
+codex() { # file cwd thread_source user-text...
+  local f=$1 cwd=$2 ts=$3; shift 3
+  { jq -nc --arg c "$cwd" --arg t "$ts" '{type:"session_meta",payload:{cwd:$c,thread_source:$t}}'
+    jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"# AGENTS.md instructions for x"}]}}'
+    jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"<environment_context>cwd</environment_context>"}]}}'
+    for u in "$@"; do jq -nc --arg u "$u" '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"<image name=[Image #1]>"},{type:"input_image"},{type:"input_text",text:"</image>"},{type:"input_text",text:$u}]}}'; done
+    jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:"working on it"}]}}'
+    jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:"codex done"}]}}'
+  } >"$cx/rollout-$f.jsonl"; touch -t 202610201200 "$cx/rollout-$f.jsonl"; }
+codex a "$tmp/repos/main/sub" user "codex work task"
+codex b "$tmp/repos/main" guardian_review "reviewer chatter"
+codex c "$tmp/repos/main" subagent "subagent chatter"
+codex d "$tmp/home-diary" user "codex private diary"
+codex e "$tmp/repos/main" user "/weekly-roundup --dry-run" "codex roundup mail"
+cfg ''; out=$(sw)
+grep -q '^### codex 2026-10-20 repos/main/sub$' <<<"$out" && grep -q '^USER: codex work task$' <<<"$out" && grep -q '^FINAL: codex done$' <<<"$out" \
+  && ! grep -q 'working on it\|AGENTS.md\|environment_context\|Image #1' <<<"$out" \
+  && echo "ok   codex session swept (own text + final reply)" || { echo "FAIL codex sweep"; echo "$out"; fail=1; }
+! grep -q 'reviewer chatter\|subagent chatter' <<<"$out" && echo "ok   codex reviewer/subagent threads skipped" || { echo "FAIL codex non-user threads"; echo "$out"; fail=1; }
+! grep -q 'codex private diary' <<<"$out" && grep -q 'sessions|outside session_dirs|skipped|2|-' <<<"$out" \
+  && echo "ok   codex session outside session_dirs skipped" || { echo "FAIL codex allow-list"; echo "$out"; fail=1; }
+! grep -q 'codex roundup mail' <<<"$out" && grep -q 'sessions|roundup runs|skipped|1|-' <<<"$out" \
+  && echo "ok   codex roundup run skipped" || { echo "FAIL codex roundup skip"; echo "$out"; fail=1; }
+grep -q '^codex|2026-10-20 repos/main/sub|transcript|' <<<"$out" && echo "ok   codex in STATS" || { echo "FAIL codex STATS"; echo "$out"; fail=1; }
+cfg ',"codex_sessions_dir":""'; out=$(sw)
+! grep -q 'codex work task' <<<"$out" && echo "ok   codex_sessions_dir \"\" turns it off" || { echo "FAIL codex off"; echo "$out"; fail=1; }
 exit $fail

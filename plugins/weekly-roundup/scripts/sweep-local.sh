@@ -91,6 +91,9 @@ clerk=$(c '.clerk_dir // empty'); tdir=$(c '.transcripts_dir'); skips=$(c '.skip
 # Allow-list: a session counts only if its cwd is a session_dirs entry or inside one. Others are
 # counted in STATS, never named, so personal projects don't leak into a work log.
 sdirs=$(c '.session_dirs[]'); nskip=0; nrun=0
+cdir=$(c '.codex_sessions_dir // empty'); [ -d "$cdir" ] || cdir=
+# A user turn that starts a roundup run (slash command or command tag).
+runre='<command-name>/weekly-roundup(:weekly-roundup)?</command-name>|^\s*/weekly-roundup(:weekly-roundup)?(\s|$)'
 # Paths compare in Git Bash form (posix_path): on Windows, transcripts record C:\Users\..., configs /c/Users/....
 inside() { local d p; [ -n "$1" ] || return 1; p=$(posix_path "$1"); while IFS= read -r d; do d=$(posix_path "${d%/}"); [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
 # clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
@@ -120,8 +123,7 @@ while [[ ! "$d" > "$end" ]]; do
     inside "$tcwd" || { nskip=$((nskip+1)); continue; }
     # Earlier roundup runs: their transcripts hold other people's mail and chats, and agent reports
     # that would be swept back in as work. Counted, never read. (Setup sessions are swept.)
-    jq -e 'select(.type=="user" and (.message.content|type)=="string") | .message.content
-           | select(test("<command-name>/weekly-roundup(:weekly-roundup)?</command-name>|^\\s*/weekly-roundup(:weekly-roundup)?(\\s|$)"))' \
+    jq -e --arg re "$runre" 'select(.type=="user" and (.message.content|type)=="string") | .message.content | select(test($re))' \
        "$t" >/dev/null 2>&1 && { nrun=$((nrun+1)); continue; }
     # Through the environment, not -v: awk -v reads backslashes as escapes (C:\Users becomes C:Users).
     slug=$(c="$tcwd" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
@@ -134,6 +136,31 @@ while [[ ! "$d" > "$end" ]]; do
     echo "### $(late "$d")transcript $d $name"; head -c $((cap_tkb*1024)) <<<"$txt"; echo
     stats+=("transcript|$d $name|no clerk summary|$bytes B|$hit")
   done < <(find "$tdir" -mindepth 2 -maxdepth 2 -name '*.jsonl' -newer "$tmp/from" ! -newer "$tmp/to" -print0)
+  # Codex sessions (clerk doesn't summarize them): ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl, same day filter.
+  # Only threads the user started (thread_source "user"): approval reviewers and subagents report into
+  # their parent, and Codex runs started from Claude Code show up in that Claude transcript.
+  [ -n "$cdir" ] && while IFS= read -r -d '' t; do
+    meta=$(jq -c 'select(.type=="session_meta") | .payload | {cwd, ts: .thread_source}' "$t" 2>/dev/null | head -1)
+    [ "$(jq -r '.ts // empty' <<<"$meta" 2>/dev/null)" = user ] || continue
+    tcwd=$(jq -r '.cwd // empty' <<<"$meta")
+    [ -n "$skips" ] && grep -qE "$skips" <<<"$tcwd" && continue
+    inside "$tcwd" || { nskip=$((nskip+1)); continue; }
+    # The user's own text: drop injected context (AGENTS.md, <environment_context>, <skill>, image markers).
+    user=$(jq -r 'select(.type=="response_item" and .payload.type=="message" and .payload.role=="user")
+                  | [.payload.content[]? | select(.type=="input_text") | .text
+                     | select(test("^\\s*(<|# AGENTS\\.md instructions|\\[Image #[0-9]+\\]\\s*$)") | not)]
+                  | join("\n") | select(. != "") | "USER: " + .' "$t" 2>/dev/null)
+    jq -e --arg re "$runre" 'select(.type=="response_item" and .payload.role=="user") | .payload.content[]?
+           | select(.type=="input_text") | .text | select(test($re))' "$t" >/dev/null 2>&1 && { nrun=$((nrun+1)); continue; }
+    txt=$( { [ -n "$user" ] && printf '%s\n' "$user"
+             jq -rs '[.[] | select(.type=="response_item" and .payload.role=="assistant") | .payload.content[]?
+                      | select(.type=="output_text") | .text] | last // empty | "FINAL: " + .' "$t" 2>/dev/null; } )
+    [ -n "$user" ] || continue
+    name=$(posix_path "$tcwd"); name=${name#"$HOME"/}
+    bytes=${#txt}; hit=no; [ "$bytes" -gt $((cap_tkb*1024)) ] && hit=yes
+    echo "### $(late "$d")codex $d $name"; head -c $((cap_tkb*1024)) <<<"$txt"; echo
+    stats+=("codex|$d $name|transcript|$bytes B|$hit")
+  done < <(find "$cdir" -name 'rollout-*.jsonl' -newer "$tmp/from" ! -newer "$tmp/to" -print0)
   d=$(addday "$d")
 done
 

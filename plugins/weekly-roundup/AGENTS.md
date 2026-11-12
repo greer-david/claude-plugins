@@ -16,7 +16,7 @@ Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and 
 - `scripts/platform.sh`: sourced by every script, hook and test (directly or via `lib.sh`/`tz.sh`; safe to source twice). On Git Bash only: `jq -b` (Windows jq writes CRLF) and `MSYS=winsymlinks:sys` (`ln -s` makes a real symlink, needed by the run lock). Everywhere: `posix_path` (`C:\Users\x` or `C:/Users/x` to `/c/Users/x`; compare paths from Windows only through it)
 - `scripts/tz.sh`: sourced by the scripts; `offset_at`, `midnights DATE...` (each day's local midnight, with that day's own UTC offset), `local_to_utc` (a zone-less time at its own offset) and `local_stamp` (docs/adr/0003)
 - `scripts/start-run.sh [--week D | --since X] [--dry-run]`: fixes the run's window once (run_at, week_start, window_start, window_end) in the run's state; the guard, the sweep and check-log read it. The previous run is read from `covered.jsonl` (from log frontmatter only before the first checkpoint, so editing a log can't skip a span); dry runs are never recorded
-- `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
+- `scripts/sweep-local.sh [SINCE UNTIL]`: git/gh/clerk/transcript/Codex sweep of the window (sessions only from `session_dirs`, default `repos`), with caps, `[late]` marks and a STATS block
 - `scripts/check-log.sh LOG`: fails if the log's window frontmatter or dry_run differs from the run's, or a possibly-missed item lacks a source tag, or an email one wasn't opened in the run with the user in To; on ok, records a real run's window in `~/.local/state/weekly-roundup/covered.jsonl`
 - `scripts/calibration-check.sh REPORT BASELINE`: `--calibrate` coverage check (every baseline item has a row with an allowed result and cause) that writes the totals and run-stats into the report
 - `scripts/run-stats.sh [RUN]`: M365 call table, errors, unread pages and omitted days (window days no successful email or chat search covered) from the call record
@@ -24,7 +24,7 @@ Two skills. `/weekly-roundup` sweeps a week of work, writes a markdown log, and 
 - `tests/stats-test.sh`: recorder (errors, classification) + unread-page and omitted-day detection self-test
 - `tests/filter-test.sh`: noise filter + Dropped table self-test
 - `tests/calibration-test.sh`: calibration-check self-test
-- `tests/sweep-test.sh`: sweep-local GitHub sections with a stubbed `gh`
+- `tests/sweep-test.sh`: sweep-local GitHub sections with a stubbed `gh`, session allow-listing and Codex threads
 - `tests/window-test.sh`: start-run window rules + check-log self-test
 - `tests/linux.sh`: runs every test in a Debian container (docker), as a non-root user
 - `tests/approval-test.sh`: approve.sh + guard approval binding self-test

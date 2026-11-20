@@ -3,7 +3,7 @@
 Once a week, `/weekly-roundup` collects what you did and writes a log you can use for status updates and Jira. It looks at:
 
 - your git commits and GitHub PRs and reviews
-- your Claude Code sessions (clerk summaries if you use clerk, otherwise the session transcripts) in your configured repos
+- your Claude Code sessions (clerk summaries where they cover a session, otherwise the session transcripts) in your configured repos
 - your Codex sessions (`~/.codex/sessions`) in the same folders; set `codex_sessions_dir` to `""` to leave them out
 - Jira tickets you touched
 - Microsoft 365 (Outlook, calendar, Teams, SharePoint) through the claude.ai connector

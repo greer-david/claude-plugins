@@ -58,7 +58,7 @@ rm -rf "$tmp/p/win" "$tmp/clerk"
 # Case: on macOS and Windows ~/x/REPOS and ~/x/repos are one folder, and transcripts and clerk keep the
 # spelling the session started in. There both match session_dirs and the clerk lookup; elsewhere neither.
 mkdir -p "$tmp/p/case" "$tmp/clerk/slug" "$tmp/clerk/summary/20261020"
-printf '%s\n' '{"cwd":"'"$tmp"'/REPOS/main/sub","type":"user","message":{"content":"upper-case work"}}' >"$tmp/p/case/u.jsonl"
+printf '%s\n' '{"cwd":"'"$tmp"'/REPOS/main/casedir","type":"user","message":{"content":"upper-case work"}}' >"$tmp/p/case/u.jsonl"
 touch -t 202610201200 "$tmp/p/case/u.jsonl"
 cfg ',"session_dirs":["'"$tmp"'/repos/main"]'; out=$(sw)
 if [ -n "$_fold_case" ]; then
@@ -66,7 +66,7 @@ if [ -n "$_fold_case" ]; then
 else
   ! grep -q 'upper-case work' <<<"$out" && echo "ok   case-sensitive cwd kept apart" || { echo "FAIL case-sensitive cwd"; echo "$out"; fail=1; }
 fi
-printf '%s\n' '{"cwd":"'"$tmp"'/repos/main/sub"}' >"$tmp/clerk/slug/main-sub.json"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main/casedir"}' >"$tmp/clerk/slug/main-sub.json"
 echo "clerk case note" >"$tmp/clerk/summary/20261020/main-sub.md"
 cfg ',"session_dirs":["'"$tmp"'/repos/main"],"clerk_dir":"'"$tmp"'/clerk"'; out=$(sw)
 if [ -n "$_fold_case" ]; then
@@ -74,6 +74,35 @@ if [ -n "$_fold_case" ]; then
     && echo "ok   case-folded transcript uses its clerk summary" || { echo "FAIL case-folded clerk match"; echo "$out"; fail=1; }
 fi
 rm -rf "$tmp/p/case" "$tmp/clerk"
+# A clerk summary stands in for a transcript only if written after it and no other session shared the project that day.
+mkdir -p "$tmp/p/ck" "$tmp/clerk/slug" "$tmp/clerk/summary/20261020"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main"}' >"$tmp/clerk/slug/main.json"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"first session work"}}' >"$tmp/p/ck/a.jsonl"
+echo "clerk last reply only" >"$tmp/clerk/summary/20261020/main.md"
+touch -t 202610201200 "$tmp/p/ck/a.jsonl"; touch -t 202610201300 "$tmp/clerk/summary/20261020/main.md"
+cfg ',"clerk_dir":"'"$tmp"'/clerk"'; out=$(sw)
+grep -q 'clerk last reply only' <<<"$out" && ! grep -q 'first session work' <<<"$out" \
+  && echo "ok   newer clerk summary of a lone session replaces its transcript" || { echo "FAIL lone session clerk"; echo "$out"; fail=1; }
+touch -t 202610201100 "$tmp/clerk/summary/20261020/main.md"; out=$(sw)
+grep -q 'first session work' <<<"$out" && grep -q 'transcript|2026-10-20 .*|clerk summary older than session|' <<<"$out" \
+  && echo "ok   clerk summary older than the session: transcript read" || { echo "FAIL stale clerk"; echo "$out"; fail=1; }
+touch -t 202610201300 "$tmp/clerk/summary/20261020/main.md"
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"second session work"}}' >"$tmp/p/ck/b.jsonl"
+touch -t 202610201200 "$tmp/p/ck/b.jsonl"; out=$(sw)
+grep -q 'first session work' <<<"$out" && grep -q 'second session work' <<<"$out" && grep -q 'clerk last reply only' <<<"$out" \
+  && [ "$(grep -c '|clerk summary shared by 2 sessions|' <<<"$out")" -eq 2 ] \
+  && echo "ok   two sessions in one project-day: both transcripts read" || { echo "FAIL concurrent clerk"; echo "$out"; fail=1; }
+rm -rf "$tmp/p/ck" "$tmp/clerk"
+# Over transcript_kb, the final reply is kept and the user turns are cut to fit.
+mkdir -p "$tmp/p/big"; long=$(printf 'x%.0s' $(seq 1 3000))
+{ printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"start '"$long"'"}}'
+  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"the final outcome"}]}}'; } >"$tmp/p/big/a.jsonl"
+touch -t 202610201200 "$tmp/p/big/a.jsonl"
+cfg ',"caps":{"transcript_kb":1}'; out=$(sw)
+sec=$(awk '/^### transcript 2026-10-20 /{p=1} p&&/^## STATS/{exit} p' <<<"$out" | grep -v 'work bug')
+grep -q 'FINAL: the final outcome' <<<"$sec" && grep -q 'cut to transcript_kb' <<<"$sec" && [ "$(printf '%s' "$sec" | wc -c)" -lt 1300 ] \
+  && grep -q '|yes$' <<<"$out" && echo "ok   capped transcript keeps its final reply" || { echo "FAIL cap keeps final"; echo "$sec"; fail=1; }
+rm -rf "$tmp/p/big"
 # Earlier roundup runs aren't swept (they hold others' mail and chats); setup sessions are.
 mkdir -p "$tmp/p/rr"
 printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"<command-name>/weekly-roundup:weekly-roundup</command-name>"}}' '{"type":"user","message":{"content":"roundup secret mail"}}' >"$tmp/p/rr/a.jsonl"

@@ -55,6 +55,25 @@ cfg ',"repos":[],"session_dirs":["/c/Users/me/repos/wr"],"clerk_dir":"'"$tmp"'/c
 grep -q 'clerk windows note' <<<"$out" && ! grep -q 'windows work' <<<"$out" && ! grep -q 'awk: warning' <<<"$out" \
   && echo "ok   Windows transcript uses its clerk summary" || { echo "FAIL Windows clerk match"; echo "$out"; fail=1; }
 rm -rf "$tmp/p/win" "$tmp/clerk"
+# Case: on macOS and Windows ~/x/REPOS and ~/x/repos are one folder, and transcripts and clerk keep the
+# spelling the session started in. There both match session_dirs and the clerk lookup; elsewhere neither.
+mkdir -p "$tmp/p/case" "$tmp/clerk/slug" "$tmp/clerk/summary/20261020"
+printf '%s\n' '{"cwd":"'"$tmp"'/REPOS/main/sub","type":"user","message":{"content":"upper-case work"}}' >"$tmp/p/case/u.jsonl"
+touch -t 202610201200 "$tmp/p/case/u.jsonl"
+cfg ',"session_dirs":["'"$tmp"'/repos/main"]'; out=$(sw)
+if [ -n "$_fold_case" ]; then
+  grep -q 'upper-case work' <<<"$out" && echo "ok   case-folded cwd matches session_dirs" || { echo "FAIL case-folded cwd"; echo "$out"; fail=1; }
+else
+  ! grep -q 'upper-case work' <<<"$out" && echo "ok   case-sensitive cwd kept apart" || { echo "FAIL case-sensitive cwd"; echo "$out"; fail=1; }
+fi
+printf '%s\n' '{"cwd":"'"$tmp"'/repos/main/sub"}' >"$tmp/clerk/slug/main-sub.json"
+echo "clerk case note" >"$tmp/clerk/summary/20261020/main-sub.md"
+cfg ',"session_dirs":["'"$tmp"'/repos/main"],"clerk_dir":"'"$tmp"'/clerk"'; out=$(sw)
+if [ -n "$_fold_case" ]; then
+  grep -q 'clerk case note' <<<"$out" && ! grep -q 'upper-case work' <<<"$out" \
+    && echo "ok   case-folded transcript uses its clerk summary" || { echo "FAIL case-folded clerk match"; echo "$out"; fail=1; }
+fi
+rm -rf "$tmp/p/case" "$tmp/clerk"
 # Earlier roundup runs aren't swept (they hold others' mail and chats); setup sessions are.
 mkdir -p "$tmp/p/rr"
 printf '%s\n' '{"cwd":"'"$tmp"'/repos/main","type":"user","message":{"content":"<command-name>/weekly-roundup:weekly-roundup</command-name>"}}' '{"type":"user","message":{"content":"roundup secret mail"}}' >"$tmp/p/rr/a.jsonl"

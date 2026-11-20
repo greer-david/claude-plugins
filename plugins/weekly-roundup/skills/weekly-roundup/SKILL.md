@@ -20,7 +20,7 @@ Run `scripts/config-json` (in the plugin root). It prints `~/.config/weekly-roun
 - `clerk_dir`: clerk `output.dir` (optional)
 - `transcripts_dir`: default `~/.claude/projects`
 - `codex_sessions_dir`: default `~/.codex/sessions`; Codex threads the user started are swept from it (same `session_dirs` and caps). `""` turns it off
-- `session_dirs`: folders whose Claude Code sessions are swept (a session counts if its working directory is one of them or inside one); default: `repos`. Other sessions are only counted in STATS. `["~"]` sweeps everything.
+- `session_dirs`: folders whose Claude Code sessions are swept (a session counts if its working directory is one of them or inside one, ignoring case on macOS and Windows); default: `repos`. Other sessions are only counted in STATS. `["~"]` sweeps everything.
 - `skip_projects`: transcript or clerk slugs to ignore inside those (substring match)
 - `jira`: `site`, `project` (a key, or a list of keys when the team's tickets span projects, e.g. mid-migration; new tickets go in the first), `user` (display name)
 - `week_start_day`: `sunday` by default

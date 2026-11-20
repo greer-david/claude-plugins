@@ -94,11 +94,14 @@ sdirs=$(c '.session_dirs[]'); nskip=0; nrun=0
 cdir=$(c '.codex_sessions_dir // empty'); [ -d "$cdir" ] || cdir=
 # A user turn that starts a roundup run (slash command or command tag).
 runre='<command-name>/weekly-roundup(:weekly-roundup)?</command-name>|^\s*/weekly-roundup(:weekly-roundup)?(\s|$)'
-# Paths compare in Git Bash form (posix_path): on Windows, transcripts record C:\Users\..., configs /c/Users/....
-inside() { local d p; [ -n "$1" ] || return 1; p=$(posix_path "$1"); while IFS= read -r d; do d=$(posix_path "${d%/}"); [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
-# clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
+# Paths compare as path_key: Git Bash form (on Windows, transcripts record C:\Users\..., configs
+# /c/Users/...), case folded on macOS and Windows (a session started in ~/x/repos is inside ~/x/Repos).
+skeys=$(while IFS= read -r d; do d=${d%/}; [ -n "$d" ] && path_key "$d"; done <<<"$sdirs")
+inside() { local d p; [ -n "$1" ] || return 1; p=$(path_key "$1"); while IFS= read -r d; do [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$skeys"; return 1; }
+# clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd (as path_key) to its slug so a transcript
 # is read only when clerk has no summary for that session's project on that day.
-cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do jq -r --arg s "$(basename "$j" .json)" '"\(.cwd)\t\($s)"' "$j" 2>/dev/null; done )
+cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do
+  sc=$(jq -r '.cwd // empty' "$j" 2>/dev/null) && [ -n "$sc" ] && printf '%s\t%s\n' "$(path_key "$sc")" "$(basename "$j" .json)"; done )
 d=$start
 while [[ ! "$d" > "$end" ]]; do
   dd=${d//-/}
@@ -126,7 +129,7 @@ while [[ ! "$d" > "$end" ]]; do
     jq -e --arg re "$runre" 'select(.type=="user" and (.message.content|type)=="string") | .message.content | select(test($re))' \
        "$t" >/dev/null 2>&1 && { nrun=$((nrun+1)); continue; }
     # Through the environment, not -v: awk -v reads backslashes as escapes (C:\Users becomes C:Users).
-    slug=$(c="$tcwd" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
+    slug=$(c="$(path_key "$tcwd")" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
     [ -n "$slug" ] && [ -f "$clerk/summary/$dd/$slug.md" ] && continue
     txt=$( { jq -r 'select(.type=="user" and (.message.content|type)=="string") | "USER: " + .message.content' "$t" 2>/dev/null
              jq -rs '[.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text] | last // empty | "FINAL: " + .' "$t" 2>/dev/null; } )

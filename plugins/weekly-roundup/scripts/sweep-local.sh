@@ -94,11 +94,14 @@ sdirs=$(c '.session_dirs[]'); nskip=0; nrun=0
 cdir=$(c '.codex_sessions_dir // empty'); [ -d "$cdir" ] || cdir=
 # A user turn that starts a roundup run (slash command or command tag).
 runre='<command-name>/weekly-roundup(:weekly-roundup)?</command-name>|^\s*/weekly-roundup(:weekly-roundup)?(\s|$)'
-# Paths compare in Git Bash form (posix_path): on Windows, transcripts record C:\Users\..., configs /c/Users/....
-inside() { local d p; [ -n "$1" ] || return 1; p=$(posix_path "$1"); while IFS= read -r d; do d=$(posix_path "${d%/}"); [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$sdirs"; return 1; }
-# clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd to its slug so a transcript
+# Paths compare as path_key: Git Bash form (on Windows, transcripts record C:\Users\..., configs
+# /c/Users/...), case folded on macOS and Windows (a session started in ~/x/repos is inside ~/x/Repos).
+skeys=$(while IFS= read -r d; do d=${d%/}; [ -n "$d" ] && path_key "$d"; done <<<"$sdirs")
+inside() { local d p; [ -n "$1" ] || return 1; p=$(path_key "$1"); while IFS= read -r d; do [ -n "$d" ] || continue; case "$p" in "$d"|"$d"/*) return 0;; esac; done <<<"$skeys"; return 1; }
+# clerk keeps slug/<slug>.json = {"cwd": ...}; map each cwd (as path_key) to its slug so a transcript
 # is read only when clerk has no summary for that session's project on that day.
-cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do jq -r --arg s "$(basename "$j" .json)" '"\(.cwd)\t\($s)"' "$j" 2>/dev/null; done )
+cwdmap=$( [ -n "$clerk" ] && for j in "$clerk"/slug/*.json; do
+  sc=$(jq -r '.cwd // empty' "$j" 2>/dev/null) && [ -n "$sc" ] && printf '%s\t%s\n' "$(path_key "$sc")" "$(basename "$j" .json)"; done )
 d=$start
 while [[ ! "$d" > "$end" ]]; do
   dd=${d//-/}
@@ -117,6 +120,8 @@ while [[ ! "$d" > "$end" ]]; do
   # Clipped to the window: from max(local midnight, window start) to min(next midnight, window end).
   t0=$(jq -rn --arg d "$d" --argjson w "$w" '$w.mid as $m | [([$m[$d], $w.a] | max), ([$m[$d | strptime("%Y-%m-%d") | mktime + 86400 | strftime("%Y-%m-%d")], $w.b] | min)] | @tsv')
   touch -t "$(local_stamp "${t0%%$'\t'*}")" "$tmp/from" && touch -t "$(local_stamp "${t0#*$'\t'}")" "$tmp/to" || { stats+=("transcript|$d|error: can't stamp reference files|0|-"); d=$(addday "$d"); continue; }
+  # Pass 1: this day's transcripts in session_dirs, as "file<TAB>cwd key" (the key counts sessions per project).
+  : >"$tmp/day"
   while IFS= read -r -d '' t; do
     [ -n "$skips" ] && grep -qE "$skips" <<<"$(basename "$(dirname "$t")")" && continue
     tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
@@ -125,17 +130,38 @@ while [[ ! "$d" > "$end" ]]; do
     # that would be swept back in as work. Counted, never read. (Setup sessions are swept.)
     jq -e --arg re "$runre" 'select(.type=="user" and (.message.content|type)=="string") | .message.content | select(test($re))' \
        "$t" >/dev/null 2>&1 && { nrun=$((nrun+1)); continue; }
-    # Through the environment, not -v: awk -v reads backslashes as escapes (C:\Users becomes C:Users).
-    slug=$(c="$tcwd" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
-    [ -n "$slug" ] && [ -f "$clerk/summary/$dd/$slug.md" ] && continue
-    txt=$( { jq -r 'select(.type=="user" and (.message.content|type)=="string") | "USER: " + .message.content' "$t" 2>/dev/null
-             jq -rs '[.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text] | last // empty | "FINAL: " + .' "$t" 2>/dev/null; } )
-    [ -n "$txt" ] || continue
-    name=$(posix_path "$tcwd"); name=${name#"$HOME"/}
-    bytes=${#txt}; hit=no; [ "$bytes" -gt $((cap_tkb*1024)) ] && hit=yes
-    echo "### $(late "$d")transcript $d $name"; head -c $((cap_tkb*1024)) <<<"$txt"; echo
-    stats+=("transcript|$d $name|no clerk summary|$bytes B|$hit")
+    printf '%s\t%s\n' "$t" "$(path_key "$tcwd")" >>"$tmp/day"
   done < <(find "$tdir" -mindepth 2 -maxdepth 2 -name '*.jsonl' -newer "$tmp/from" ! -newer "$tmp/to" -print0)
+  # Pass 2: a clerk summary stands in for a transcript only if it can cover it: written after the
+  # transcript's last change, and the only session in that project that day (clerk keeps one summary
+  # and one read cursor per project-day, so concurrent sessions overwrite each other). Otherwise, or
+  # without clerk, the transcript is read.
+  while IFS=$'\t' read -r t key; do
+    tcwd=$(jq -r 'select(.cwd) | .cwd' "$t" 2>/dev/null | head -1)
+    # Through the environment, not -v: awk -v reads backslashes as escapes (C:\Users becomes C:Users).
+    slug=$(c="$key" awk -F'\t' '$1==ENVIRON["c"]{print $2; exit}' <<<"$cwdmap")
+    why="no clerk summary"
+    if [ -n "$slug" ] && [ -f "$clerk/summary/$dd/$slug.md" ]; then
+      nsame=$(c="$key" awk -F'\t' '$2==ENVIRON["c"]' "$tmp/day" | grep -c .)
+      if [ "$nsame" -gt 1 ]; then why="clerk summary shared by $nsame sessions"
+      elif [ "$t" -nt "$clerk/summary/$dd/$slug.md" ]; then why="clerk summary older than session"
+      else continue; fi
+    fi
+    user=$(jq -r 'select(.type=="user" and (.message.content|type)=="string") | "USER: " + .message.content' "$t" 2>/dev/null)
+    final=$(jq -rs '[.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text] | last // empty | "FINAL: " + .' "$t" 2>/dev/null)
+    txt=$(printf '%s\n%s' "$user" "$final")
+    [ -n "$user$final" ] || continue
+    name=$(posix_path "$tcwd"); name=${name#"$HOME"/}
+    bytes=$(printf '%s' "$txt" | wc -c | tr -d ' '); hit=no; [ "$bytes" -gt $((cap_tkb*1024)) ] && hit=yes
+    echo "### $(late "$d")transcript $d $name"
+    # Over the cap, the final reply (the outcome) is kept: the user turns are cut to fit beside it.
+    if [ "$hit" = yes ]; then
+      fb=$(printf '%s' "$final" | head -c $((cap_tkb*1024/2)) | wc -c | tr -d ' ')
+      printf '%s' "$user" | head -c $((cap_tkb*1024 - fb - 40)); printf '\n[... cut to transcript_kb ...]\n'
+      printf '%s' "$final" | head -c "$fb"; echo
+    else printf '%s\n' "$txt"; fi
+    stats+=("transcript|$d $name|$why|$bytes B|$hit")
+  done <"$tmp/day"
   # Codex sessions (clerk doesn't summarize them): ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl, same day filter.
   # Only threads the user started (thread_source "user"): approval reviewers and subagents report into
   # their parent, and Codex runs started from Claude Code show up in that Claude transcript.

@@ -3,7 +3,7 @@
 Once a week, `/weekly-roundup` collects what you did and writes a log you can use for status updates and Jira. It looks at:
 
 - your git commits and GitHub PRs and reviews
-- your Claude Code sessions (clerk summaries if you use clerk, otherwise the session transcripts) in your configured repos
+- your Claude Code sessions (clerk summaries where they cover a session, otherwise the session transcripts) in your configured repos
 - your Codex sessions (`~/.codex/sessions`) in the same folders; set `codex_sessions_dir` to `""` to leave them out
 - Jira tickets you touched
 - Microsoft 365 (Outlook, calendar, Teams, SharePoint) through the claude.ai connector
@@ -66,6 +66,8 @@ What the setup skill does, if you'd rather do it yourself.
    alias roundup-session='env -u ENABLE_CLAUDEAI_MCP_SERVERS WEEKLY_ROUNDUP_RUN=$(date +%Y%m%dT%H%M%S) claude'
    ```
 
+   Use them only for roundups. For any other session that needs the claude.ai connectors, run `env -u ENABLE_CLAUDEAI_MCP_SERVERS claude` without `WEEKLY_ROUNDUP_RUN`: with it, the session gets roundup limits and leaves a run folder in `~/.local/state/weekly-roundup/`.
+
    **Optional: Microsoft 365 only in roundup sessions.** To keep claude.ai connectors out of your everyday sessions, also add `export ENABLE_CLAUDEAI_MCP_SERVERS=false`; the aliases turn them back on for roundups. Without it, the aliases work the same and M365 stays loaded everywhere (outside a run the guard allows only reads). Don't use the `disableClaudeAiConnectors` setting for this. Once it's `true` anywhere, nothing can turn connectors back on for one session.
 
 5. **Check the hook works:** from the installed plugin folder, run `bash tests/guard-test.sh --quick`. Every line should say `ok`. Contributors run every test: `for t in tests/*-test.sh; do bash "$t"; done` (approval, calibration, filter, guard, stats, sweep, team-rules, window); on Git Bash that takes about half an hour. Contributors on a Mac can run the same tests on Linux with `tests/linux.sh` (needs Docker).
@@ -94,4 +96,4 @@ Your corrections become rule proposals at the end of each run. Personal rules ar
 
 Your config, rules, logs and call record stay on your machine: logs go to the folder in your config, the call record to `~/.local/state/weekly-roundup/`. The run itself is not local. What it sweeps (mail, Teams, Jira, commits, session text) is sent to the model provider as part of the Claude Code session, and mail, Teams and Jira are read through their hosted connectors. Each person sweeps only their own sources.
 
-Sessions are swept only from the folders in `session_dirs` (default: your `repos`), so sessions in personal projects stay out. Set it to `["~"]` to include every session.
+Sessions are swept only from the folders in `session_dirs` (default: your `repos`), so sessions in personal projects stay out. Set it to `["~"]` to include every session. On macOS and Windows folder names match without case, so a session started in `~/Repos/x` counts for `~/repos/x`.

@@ -15,7 +15,7 @@ Start from a stock machine: assume only Claude Code and what it needs (Git for W
 Check each and show a table: requirement, ok / missing, and the fix.
 
 - `jq`, `git`, `gh` on PATH, and `gh auth status` signed in. These three block setup: if one is missing, show the fix and stop. Until `jq` is installed, the plugin's guard blocks every Jira and Microsoft 365 call in every session, so fix it first.
-- **Atlassian MCP:** a loaded tool from a server whose name contains `atlassian`, `jira`, `confluence` or `rovo` (the guard recognises Jira by that name). Fix: `claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v1/mcp`, then sign in. Offer to run it.
+- **Atlassian MCP:** a loaded tool from a server whose name contains `atlassian`, `jira`, `confluence` or `rovo` (the guard recognises Jira by that name). Fix: `claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v2/mcp`, then sign in. Offer to run it.
 - **Microsoft 365:** `mcp__claude_ai_Microsoft_365__*` tools loaded. If they aren't, the connector is either not connected (claude.ai → Settings → Connectors) or turned off for this session (`ENABLE_CLAUDEAI_MCP_SERVERS=false`, the optional line in step 5). Roundups run without it and list it under Gaps.
 - **clerk** (optional): `command -v clerk`.
 

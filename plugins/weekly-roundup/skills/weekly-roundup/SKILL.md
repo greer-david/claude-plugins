@@ -83,7 +83,7 @@ After the M365 subagents return, run `scripts/run-stats.sh`. If it lists **unrea
 Jira proposals: number them continuously. Each proposal heading must use one of these exact forms, because `hooks/approve.sh` reads them to bind approvals (anything else can't be approved), followed by the sources and a confidence (high/med/low):
 
 - `**N. KEY-123 · comment**`, then the exact comment text as a quote block (`> ` lines), posted as Markdown
-- `**N. KEY-123 · status → Done (transition 31)**`: the transition ID from `getTransitionsForJiraIssue`
+- `**N. KEY-123 · status → Done (transition 31)**`: the transition ID from `listJiraIssueTransitions` (through `executeRead`; `getTransitionsForJiraIssue` on a v1 server)
 - `**N. KEY-123 · link Blocks → KEY-456**`: the first key is the inward issue, the second the outward
 - `**N. KEY · new Task**`: then a quote block whose first line is the summary and the rest the description
 
@@ -94,6 +94,11 @@ The quote is exactly what gets posted. Don't put anything in a post that the pro
 Show the user the path and the leadership summary, then every proposal: its number, ticket (key, summary and link `https://<jira.site>/browse/<KEY>`; for a new ticket, its project and proposed summary), group, and the exact text it posts as a quote block, copied from the log. Only then ask for approvals in the form `post 1-6, 9`. The user approves what they've read, so never summarise or shorten a post's text here. If the user edits a proposal, show it again in full.
 
 - Post only the proposals named, with exactly the text the log shows. In a roundup run the guard enforces this: each `post` message (exactly `post <numbers>`, nothing else) approves one write per named proposal, and any write that doesn't match one is denied. Status changes, new tickets and links must be named singly (`post 12`); a range skips them. Each approved write still shows the user a permission prompt.
+- Pass only these keys, or the guard denies the write (Atlassian MCP v2; a v1 server's tools take the v1 names and keys the guard also accepts):
+  - comment: `addOrEditJiraIssueComment` with `cloudId`, `issueIdOrKey`, `commentBody` (Markdown; never `commentId`, visibility or files)
+  - status: `transitionJiraIssue` with `cloudId`, `issueIdOrKey`, `transitionId` (never `transitionName`, a sprint or backlog move, or fields)
+  - new ticket: `createJiraIssue` with `cloudId`, `projectKey`, `issueType`, `summary`, `description` (never an assignee, labels, priority, sprint, parent or other fields)
+  - link: `executeWrite` with `name: "createJiraIssueLink"`, `cloudId` and `inputs: {linkType, inwardIssue, outwardIssue}` (no comment)
 - If the user edits a proposal's text, they approve it again with `post N` after the edit; the earlier approval no longer counts.
 - If a post fails or is denied, report it. Don't retry with different text; ask the user to approve again.
 - After posting, mark each row in the log `✅ posted <date>` or `⏭ skipped`, and update `jira_posted`.

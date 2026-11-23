@@ -61,6 +61,8 @@ if [ "$kind" = atlassian ]; then
     getjiraissue|searchjiraissuesusingjql|getvisiblejiraprojects|getjiraprojectissuetypesmetadata|\
     getjiraissuetypemetawithfields|gettransitionsforjiraissue|getissuelinktypes|\
     getjiraissueremoteissuelinks|lookupjiraaccountid|getcontentformatguide|\
+    atlassianhome|getcollaborators|getpeopleinfo|getworkactivity|getworkportfolio|\
+    listjiraissuecomments|listjiraissuetransitions|\
     getconfluencepage|getconfluencespaces|getpagesinconfluencespace|getconfluencepagedescendants|\
     getconfluencepagefootercomments|getconfluencepageinlinecomments|getconfluencecommentchildren|\
     searchconfluenceusingcql|searchconfluence|getconfluencecontent|\
@@ -81,20 +83,35 @@ if [ "$kind" = atlassian ]; then
     def norm: gsub("\r"; "") | split("\n") | map(sub("[[:space:]]+$"; "")) | join("\n") | sub("^\\s+"; "") | sub("\\s+$"; "");
     def has($k): .[$k] != null;
     def md: (.contentFormat // "markdown") == "markdown";
+    # Each write may carry only the keys a proposal shows; any other key (comment edit or visibility,
+    # attachments, sprint or backlog moves, assignee, labels, priority, ...) is "extra". Both the v2
+    # server (mcp.atlassian.com/v2/mcp) and v1 shapes bind while v1 servers remain (claude.ai Rovo v1 connectors: until 2027-03-01).
+    def only($ks): (keys - $ks) == [];
+    def one($a; $b): [has($a), has($b)] | map(select(.)) | length == 1;
     .tool_input as $t
-    | (if $n == "addcommenttojiraissue" then
-         if ($t | has("commentId") or has("commentVisibility") or (md | not)) then "extra"
+    | (if $n == "addoreditjiraissuecomment" or $n == "addcommenttojiraissue" then
+         if ($t | only(["cloudId", "issueIdOrKey", "commentBody", "contentFormat", "responseContentFormat"]) and md | not) then "extra"
          else {action: "comment", key: ($t.issueIdOrKey | ascii_upcase), body: ($t.commentBody | norm)} end
        elif $n == "transitionjiraissue" then
-         if ($t | has("fields") or has("update") or has("historyMetadata")) then "extra"
-         else {action: "status", key: ($t.issueIdOrKey | ascii_upcase), transition: ($t.transition.id | tostring)} end
+         # v2 transitionId, or v1 transition {id}; never transitionName (the log shows the ID).
+         if ($t | only(["cloudId", "issueIdOrKey", "transitionId", "transition"]) and one("transitionId"; "transition") | not)
+            or ($t | has("transition") and ((.transition | type) != "object" or (.transition | only(["id"]) | not))) then "extra"
+         else {action: "status", key: ($t.issueIdOrKey | ascii_upcase), transition: ($t.transitionId // $t.transition.id | tostring)} end
        elif $n == "createjiraissue" then
-         if ($t | has("additional_fields") or has("assignee_account_id") or has("parent") or has("transition") or (md | not))
+         # v2 issueType, or v1 issueTypeName.
+         if ($t | only(["cloudId", "projectKey", "issueType", "issueTypeName", "summary", "description", "contentFormat"])
+                  and one("issueType"; "issueTypeName") and md | not)
             or (($t.description // "") | type) != "string" then "extra"
-         else {action: "new", project: ($t.projectKey | ascii_upcase), type: ($t.issueTypeName | ascii_downcase),
+         else {action: "new", project: ($t.projectKey | ascii_upcase), type: ($t.issueType // $t.issueTypeName | ascii_downcase),
                summary: ($t.summary | norm), description: ($t.description // "" | norm)} end
+       elif $n == "executewrite" and $t.name == "createJiraIssueLink" then
+         # v2 has no link tool: discover -> executeWrite createJiraIssueLink {linkType, inwardIssue, outwardIssue}.
+         if ($t | only(["name", "cloudId", "inputs", "responseFields", "view"]) | not)
+            or ($t.inputs | type) != "object" or ($t.inputs | only(["cloudId", "linkType", "inwardIssue", "outwardIssue"]) | not) then "extra"
+         else {action: "link", inward: ($t.inputs.inwardIssue | ascii_upcase), outward: ($t.inputs.outwardIssue | ascii_upcase),
+               type: ($t.inputs.linkType | ascii_downcase)} end
        elif $n == "createissuelink" then
-         if ($t | has("comment")) then "extra"
+         if ($t | only(["cloudId", "inwardIssue", "outwardIssue", "type"]) | not) then "extra"
          else {action: "link", inward: ($t.inwardIssue | ascii_upcase), outward: ($t.outwardIssue | ascii_upcase),
                type: ($t.type | ascii_downcase)} end
        else "unbound" end) as $want
@@ -109,8 +126,8 @@ if [ "$kind" = atlassian ]; then
              | .key] | first // "nomatch") end
   ' <<<"$input" 2>/dev/null) || decide deny "couldn't check $tool against the approvals; denied."
   case "$hit" in
-    unbound) decide deny "$tool can't be approved in a roundup run (only comments, status changes, new tickets and links from the log)" ;;
-    extra)   decide deny "$tool sets options a proposal doesn't show (comment updates or visibility, extra fields, ADF, a link comment); denied" ;;
+    unbound) decide deny "$tool can't be approved in a roundup run (only comments, status changes by transitionId, new tickets and links from the log)" ;;
+    extra)   decide deny "$tool sets options a proposal doesn't show (comment edits, visibility or attachments; transitionName, sprint or backlog moves; assignee, labels, priority or other fields; HTML or ADF; a link comment); denied" ;;
     nomatch) decide deny "$tool doesn't match any unused approved proposal exactly. Post the proposal's text as it is in the log, or have the user approve it again with: post <number>" ;;
   esac
   n=$(jq -rs --argjson i "$hit" '.[$i].n' "$state/approvals.jsonl" 2>/dev/null)

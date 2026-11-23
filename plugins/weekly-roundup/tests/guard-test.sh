@@ -34,12 +34,16 @@ expect "M365 lowercase server name"           deny  '{"tool_name":"mcp__microsof
 expect "M365 other server prefix"             deny  '{"tool_name":"mcp__my-m365__outlook_send_mail"}' "${H[@]}"
 expect "M365 name ending in an allowed name"  deny  "{\"tool_name\":\"${M}outlook_send_mail__get_me\"}" "${H[@]}"
 expect "M365 JSON-escaped name"               deny  '{"tool_name":"mcp__claude_ai_Microsoft_365__outlook_send_mail"}' "${H[@]}"
-expect "Jira comment"                         ask   "{\"tool_name\":\"${A}addCommentToJiraIssue\"}" "${H[@]}"
+expect "Jira comment"                         ask   "{\"tool_name\":\"${A}addOrEditJiraIssueComment\"}" "${H[@]}"
+expect "Jira comment (v1 name)"               ask   "{\"tool_name\":\"${A}addCommentToJiraIssue\"}" "${H[@]}"
 expect "Atlassian executeWrite"               ask   '{"tool_name":"mcp__claude_ai_Atlassian_MCP__executeWrite"}' "${H[@]}"
 expect "Atlassian executeDestructive"         ask   '{"tool_name":"mcp__claude_ai_Atlassian_MCP__executeDestructive"}' "${H[@]}"
 expect "Atlassian unlisted write (delete)"    ask   "{\"tool_name\":\"${A}deleteJiraIssue\"}" "${H[@]}"
 expect "Atlassian attachment upload"          ask   '{"tool_name":"mcp__claude_ai_Atlassian_Rovo_2__addAttachmentToJiraIssue"}' "${H[@]}"
 expect "Atlassian read"                       allow "{\"tool_name\":\"${A}getJiraIssue\"}" "${H[@]}"
+for t in atlassianHome getCollaborators getPeopleInfo getWorkActivity getWorkPortfolio listJiraIssueComments listJiraIssueTransitions; do
+  expect "Atlassian v2 read $t"                allow "{\"tool_name\":\"${A}$t\"}" "${H[@]}"
+done
 expect "Atlassian discover / executeRead"     allow '{"tool_name":"mcp__claude_ai_Atlassian_MCP__executeRead"}' "${H[@]}"
 expect "other MCP tool"                       allow '{"tool_name":"mcp__clerk__clerk-resume"}' "${H[@]}"
 
@@ -93,7 +97,7 @@ expect "corrupt call record blocks"           deny  "{\"tool_name\":\"${M}get_me
 mkdir -p "$tmp/ro/.local/state/weekly-roundup"; chmod a-w "$tmp/ro/.local/state/weekly-roundup"
 if ! touch "$tmp/ro/.local/state/weekly-roundup/.probe" 2>/dev/null; then
 expect "unwritable record: M365 blocked"      block "{\"tool_name\":\"${M}get_me\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_CONFIG="$tmp/config.json" WEEKLY_ROUNDUP_RUN=r5
-expect "unwritable record: Jira write blocked" block "{\"tool_name\":\"${A}addCommentToJiraIssue\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_RUN=r5
+expect "unwritable record: Jira write blocked" block "{\"tool_name\":\"${A}addOrEditJiraIssueComment\"}" HOME="$tmp/ro" WEEKLY_ROUNDUP_RUN=r5
 else echo "skip unwritable record: chmod can't make a folder read-only here"; fi
 
 echo "-- size ceiling (total_kb 2)"

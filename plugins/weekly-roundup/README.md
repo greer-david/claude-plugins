@@ -48,8 +48,10 @@ What the setup skill does, if you'd rather do it yourself.
 1. **Jira.** Add Atlassian's MCP server at user scope and sign in when it asks:
 
    ```
-   claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v1/mcp
+   claude mcp add --transport http --scope user atlassian https://mcp.atlassian.com/v2/mcp
    ```
+
+   Already set up with `/v1/mcp`? The guard accepts v1 and v2 tools for now; to move, `claude mcp remove --scope user atlassian`, then add it as above.
 
    Keep `atlassian` (or `jira`, `confluence`, `rovo`) in the server's name: the safety hook recognises Jira tools by that name. Your site is the `<name>.atlassian.net` part of your Jira URL. Your project is the key your team's tickets start with (`ABC` in `ABC-123`). If they're split across projects (say, mid-migration), list them: `"project": ["NEW", "OLD"]`. New tickets go in the first.
 
